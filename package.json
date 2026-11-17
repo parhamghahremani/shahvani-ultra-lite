@@ -1,0 +1,27 @@
+{
+  "name": "shahvani-ultra-lite",
+  "version": "3.5.0",
+  "description": "Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, performance profiles, IndexedDB storage, theme presets, video resume.",
+  "main": "src/shahvani-ultra-lite.user.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "npx playwright test"
+  },
+  "keywords": [
+    "tampermonkey",
+    "userscript",
+    "shahvani",
+    "performance",
+    "tap-to-load"
+  ],
+  "author": "parham",
+  "homepage": "https://github.com/parhamghahremani",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "playwright": "^1.64.1"
+  }
+}
