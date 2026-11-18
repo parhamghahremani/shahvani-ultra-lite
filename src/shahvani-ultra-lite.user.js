@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Shahvani Ultra Lite
 // @namespace    local.shahvani.ultralite
-// @version      3.5.1
-// @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, performance profiles, IndexedDB storage, theme presets, video resume, video metadata cache.
+// @version      3.5.4
+// @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, performance profiles, IndexedDB storage, theme presets, video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
 // @author       parham
 // @homepageURL  https://github.com/parhamghahremani
 // @match        *://shahvani.com/*
@@ -15,11 +15,11 @@
 (() => {
   'use strict';
 
-  const VERSION = '3.5.1';
+  const VERSION = '3.5.4';
   const KEY = 'shvUltraLite.settings.v3';
   const LEGACY_KEYS = ['shvUltraLite.settings.v2'];
   const IDB_NAME = 'shvUltraLiteDB';
-  const IDB_VERSION = 1;
+  const IDB_VERSION = 2; // v3.5.3: v2 adds the videoMetadata store for databases created by older versions
   const SITE = 'shahvani.com';
   const MEDIA_DELAY_MS = 60;
   const VISUAL_BATCH_MS = 160;
@@ -36,20 +36,38 @@
   const GESTURE_WINDOW_MS = 5000;
   const TOAST_DURATION_MS = 2200;
   const MAX_SAFE_INT = 2147483647;
+  // v3.5.4: size/duration probe (only used when videoProbe === 'auto')
+  const PROBE_HEAD_BYTES = 16384;       // request 1: ftyp + moov header + mvhd fit easily
+  const PROBE_TAIL_BYTES = 8192;        // request 2: starts exactly at the moov box (when it is behind mdat)
+  const PROBE_CONCURRENCY = 2;          // gentle on mobile
+  const PROBE_TIMEOUT_MS = 8000;
+  const PROBE_SESSION_MAX = 120;        // hard cap per page load (worst case ~3 MB in total)
+  const PROBE_VISIBLE_MARGIN = '200px 0px';
   const Z_INDEX_FAB = 2147483646;
   const Z_INDEX_SCRIM = 2147483645;
   const Z_INDEX_PANEL = 2147483647;
   const Z_INDEX_TOAST = 2147483647;
   const IS_TOP = (() => { try { return window.top === window; } catch (_) { return false; } })();
 
-  // v3.5.1: Simple non-cryptographic hash for IDB keys (replaces btoa)
+  // v3.5.3: Deterministic 64-bit-ish hash (two FNV-1a passes). The 3.5.2 version appended
+  // Date.now(), so every call produced a new key and cache / resume lookups never matched.
   function hashKey(str) {
-    let hash = 0;
+    str = String(str);
+    let h1 = 0x811c9dc5, h2 = 0x01000193 ^ str.length;
     for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) - hash) + str.charCodeAt(i);
-      hash |= 0; // Convert to 32bit integer
+      const c = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 0x01000193);
+      h2 = Math.imul(h2 ^ c, 0x85ebca6b) ^ (h2 >>> 13);
     }
-    return Math.abs(hash).toString(36) + Date.now().toString(36).slice(-4);
+    return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36);
+  }
+
+  // Stable identity for a video URL: origin + path (query tokens and hash change between visits).
+  function videoKeyUrl(raw) {
+    try {
+      const u = new URL(raw, document.baseURI);
+      return /\.(mp4|webm|m4v|mov|ogv|ogg|mkv)$/i.test(u.pathname) ? u.origin + u.pathname : u.origin + u.pathname + u.search;
+    } catch (_) { return String(raw); }
   }
 
   /* ======================================================================
@@ -106,7 +124,10 @@
     // v3.4.0 features
     showVideoIndex: true,
     showVideoInfo: true,
-    invertedNeumorphic: true
+    invertedNeumorphic: true,
+
+    // v3.5.4: size/duration lookup: 'off' (nothing at all) | 'cache' (local cache only) | 'auto' (Range probe of cards in view)
+    videoProbe: 'off'
   });
 
   const ENUMS = {
@@ -115,7 +136,8 @@
     scale: ['s', 'm', 'l'],
     side: ['left', 'right'],
     autoReleaseMin: [1, 3, 5, 10, 30],
-    themePreset: ['default', 'midnight', 'forest', 'sunset', 'monochrome', 'custom']
+    themePreset: ['default', 'midnight', 'forest', 'sunset', 'monochrome', 'custom'],
+    videoProbe: ['off', 'cache', 'auto']
   };
 
   const THEME_PRESETS = {
@@ -182,19 +204,16 @@
     return out;
   }
 
+  let settingsFromLocalStorage = false;
+
   function loadSettings() {
     const base = { ...DEFAULTS, customAdHosts: [] };
 
-    // Try IndexedDB first (larger quota, works in private browsing)
-    const idbPromise = idbLoadSettings().then(idbSettings => {
-      if (idbSettings) return sanitize(idbSettings, base);
-      return null;
-    });
-
-    // Synchronous fallback to localStorage
+    // Settings are read synchronously from localStorage so the lock can start at document-start.
+    // IndexedDB only keeps a backup copy and is consulted later (see start()).
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) return sanitize(JSON.parse(raw), base);
+      if (raw) { settingsFromLocalStorage = true; return sanitize(JSON.parse(raw), base); }
 
       for (const legacyKey of LEGACY_KEYS) {
         const legacyRaw = localStorage.getItem(legacyKey);
@@ -230,7 +249,7 @@
   // IndexedDB Storage Layer (v3.3.0)
   // ====================================================================
 
-  let idbReady = false;
+  let idbDb = null;
   let idbInitPromise = null;
 
   /**
@@ -239,7 +258,7 @@
    * @returns {Promise<IDBDatabase>} Resolves with the database instance
    */
   function idbInit() {
-    if (idbReady) return Promise.resolve();
+    if (idbDb) return Promise.resolve(idbDb);
     if (idbInitPromise) return idbInitPromise;
 
     idbInitPromise = new Promise((resolve, reject) => {
@@ -247,9 +266,11 @@
         const request = indexedDB.open(IDB_NAME, IDB_VERSION);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
-          idbReady = true;
-          resolve(request.result);
+          idbDb = request.result;
+          idbDb.onversionchange = () => { try { idbDb.close(); } catch (_) {} idbDb = null; idbInitPromise = null; };
+          resolve(idbDb);
         };
+        request.onblocked = () => reject(new Error('IndexedDB blocked'));
         request.onupgradeneeded = event => {
           const db = event.target.result;
           if (!db.objectStoreNames.contains('settings')) {
@@ -318,7 +339,7 @@
     if (!Number.isFinite(currentTime) || currentTime <= 0) return;
     idbInit().then(db => {
       const tx = db.transaction('resumePositions', 'readwrite');
-      const id = hashKey(videoSrc + '|' + pageUrl);
+      const id = hashKey(videoKeyUrl(videoSrc));
       tx.objectStore('resumePositions').put({
         id,
         videoSrc,
@@ -340,7 +361,7 @@
     return idbInit().then(db => {
       return new Promise(resolve => {
         const tx = db.transaction('resumePositions', 'readonly');
-        const id = hashKey(videoSrc + '|' + pageUrl);
+        const id = hashKey(videoKeyUrl(videoSrc));
         const req = tx.objectStore('resumePositions').get(id);
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
@@ -393,20 +414,17 @@
    * @returns {Promise<Object|null>} Cached metadata or null
    */
   function checkVideoCache(entry) {
-    const cacheKey = 'videoMeta_' + hashKey(entry.videoSrc);
+    if (!entry.videoSrc) return Promise.resolve(null);
+    const cacheKey = 'videoMeta_' + hashKey(videoKeyUrl(entry.videoSrc));
     return idbInit().then(db => {
       return new Promise(resolve => {
+        if (!db.objectStoreNames.contains('videoMetadata')) { resolve(null); return; }
         const tx = db.transaction('videoMetadata', 'readonly');
-        // Create store if needed (lazy initialization)
-        if (!db.objectStoreNames.contains('videoMetadata')) {
-          resolve(null);
-          return;
-        }
         const req = tx.objectStore('videoMetadata').get(cacheKey);
         req.onsuccess = () => {
           const result = req.result;
           if (result && Date.now() - result.timestamp < 7 * 24 * 60 * 60 * 1000) { // 7 days TTL
-            resolve({ duration: result.duration, size: result.size, aspectRatio: result.aspectRatio });
+            resolve({ duration: result.duration, size: result.size, aspectRatio: result.aspectRatio, probed: !!result.probed });
           } else {
             resolve(null);
           }
@@ -422,20 +440,26 @@
    * @returns {Promise<void>}
    */
   function saveVideoCache(entry) {
-    if (!entry.videoSrc || !entry.videoDuration && !entry.videoSize) return;
-    const cacheKey = 'videoMeta_' + hashKey(entry.videoSrc);
+    if (!entry.videoSrc || (!entry.videoDuration && !entry.videoSize && !entry.probed)) return;
+    const cacheKey = 'videoMeta_' + hashKey(videoKeyUrl(entry.videoSrc));
     idbInit().then(db => {
-      // Create store if needed (onupgradeneeded handles this, but ensure it exists)
       if (!db.objectStoreNames.contains('videoMetadata')) return;
       const tx = db.transaction('videoMetadata', 'readwrite');
-      tx.objectStore('videoMetadata').put({
-        id: cacheKey,
-        videoSrc: entry.videoSrc,
-        duration: entry.videoDuration,
-        size: entry.videoSize,
-        aspectRatio: entry.aspectRatio,
-        timestamp: Date.now()
-      });
+      const store = tx.objectStore('videoMetadata');
+      const getReq = store.get(cacheKey);
+      // v3.5.4: merge with what is already stored, so a value learned in 'off' mode never erases one learned earlier.
+      getReq.onsuccess = () => {
+        const old = getReq.result || {};
+        store.put({
+          id: cacheKey,
+          videoSrc: entry.videoSrc,
+          duration: entry.videoDuration || old.duration || 0,
+          size: entry.videoSize || old.size || 0,
+          aspectRatio: entry.aspectRatio || old.aspectRatio,
+          probed: !!(entry.probed || old.probed),
+          timestamp: Date.now()
+        });
+      };
     }).catch(() => {});
   }
 
@@ -481,7 +505,7 @@
       instantLock: 'Instant lock',
       instantLockD: 'Locks the moment a video appears instead of after a short delay. Fewer early downloads. Turn off if a player misbehaves.',
       showPoster: 'Show poster on placeholder',
-      showPosterD: 'The poster is an image and gets downloaded. Turn off to fetch nothing.',
+      showPosterD: 'Shows the poster image on the placeholder. The browser may still fetch the poster by itself; it is an image, never video data.',
       secPlayback: 'Playback Control',
       noAutoplay: 'Block autoplay and preload',
       noAutoplayD: 'Removes autoplay and sets preload to none on every video.',
@@ -622,6 +646,11 @@
       showVideoIndexD: 'Display sequential video number on each placeholder (top-left).',
       showVideoInfo: 'Show size & duration',
       showVideoInfoD: 'Display video file size and duration on placeholder (bottom-right) when available.',
+      probeMode: 'Size & duration lookup',
+      probeModeD: 'Off: nothing is requested and the cache is not read. Cache only: shows size/duration remembered from videos you opened before (no network). Auto: for each card in view that the cache does not know, only the first few KB of the file are requested (a Range request) to read size and duration; the video itself is never downloaded. Needs \u201cShow size & duration\u201d.',
+      probeOff: 'Off',
+      probeCache: 'Cache only',
+      probeAuto: 'Auto',
       invertedNeumorphic: 'Inverted neumorphic effect',
       invertedNeumorphicD: 'Flat base, raised on hover/touch. Toggle to use classic raised neumorphic.',
       stReset: 'Settings reset.',
@@ -631,6 +660,16 @@
       stPopup: 'Popup blocked.',
 
       // v3.4.1 additions - missing English keys for Overview tab
+      // v3.5.3: keys that were referenced by the UI but missing (raw key names were shown)
+      emergency: 'Emergency lock',
+      reload: 'Reload page',
+      blockedScripts: 'Blocked scripts',
+      blockedRequests: 'Blocked requests',
+      popupsBlocked: 'Blocked popups',
+      resources: 'Loaded resources',
+      cleaned: 'Cleaned entries',
+      detached: 'Detached entries',
+      probeTraffic: 'Probe requests · data',
       master: 'Script',
       masterOn: 'On',
       masterOff: 'Off',
@@ -677,7 +716,7 @@
       instantLock: 'قفل فوری',
       instantLockD: 'ویدیو همان لحظهٔ ظاهر شدن قفل می‌شود، نه بعد از تأخیر کوتاه. دانلود زودهنگام کمتر. اگر پلیری درست کار نکرد خاموش کنید.',
       showPoster: 'نمایش پوستر روی کادر',
-      showPosterD: 'پوستر یک تصویر است و دانلود می‌شود. برای دریافت نکردن هیچ چیز خاموش کنید.',
+      showPosterD: 'پوستر را روی کادر نشان می‌دهد. خود مرورگر ممکن است پوستر را مستقل دریافت کند؛ این فقط تصویر است، نه داده‌ی ویدیو.',
       secPlayback: 'کنترل پخش',
       noAutoplay: 'مسدودسازی پخش خودکار و پیش‌بارگذاری',
       noAutoplayD: 'autoplay حذف و preload روی none تنظیم می‌شود.',
@@ -823,11 +862,25 @@
       showVideoIndexD: 'نمایش شماره ترتیبی ویدیو روی هر کادر (گوشه چپ بالا).',
       showVideoInfo: 'نمایش سایز و مدت',
       showVideoInfoD: 'نمایش حجم فایل و مدت زمان ویدیو روی کادر (گوشه راست پایین) وقتی در دسترس باشد.',
+      probeMode: 'دریافت سایز و مدت',
+      probeModeD: 'خاموش: هیچ درخواستی ارسال نمی‌شود و کش هم خوانده نمی‌شود. فقط کش: سایز و مدتِ ذخیره‌شده از ویدیوهایی که قبلاً باز کرده‌اید نمایش داده می‌شود (بدون شبکه). خودکار: برای هر کارتِ در دید که در کش نیست فقط چند کیلوبایتِ اول فایل (درخواست Range) گرفته می‌شود تا سایز و مدت خوانده شود؛ خود ویدیو هرگز دانلود نمی‌شود. نیازمند فعال بودن «نمایش سایز و مدت» است.',
+      probeOff: 'خاموش',
+      probeCache: 'فقط کش',
+      probeAuto: 'خودکار',
       invertedNeumorphic: 'افکت نوماورفیک معکوس',
       invertedNeumorphicD: 'پایه صاف، پرآمده در هاور/لمس. برای استفاده از نوماورفیک کلاسیک خاموش کنید.',
 
       // v3.4.1 additions - missing Persian translations for Overview tab
-      master: 'است اسکریپت',
+      emergency: 'قفل اضطراری',
+      reload: 'بارگذاری مجدد صفحه',
+      blockedScripts: 'اسکریپت‌های مسدودشده',
+      blockedRequests: 'درخواست‌های مسدودشده',
+      popupsBlocked: 'پاپ‌آپ‌های مسدودشده',
+      resources: 'منابع بارگذاری‌شده',
+      cleaned: 'ورودی‌های پاک‌شده',
+      detached: 'ورودی‌های جداشده',
+      probeTraffic: 'درخواست‌های پروب · حجم',
+      master: 'وضعیت اسکریپت',
       masterOn: 'روشن',
       masterOff: 'خاموش',
       secQuick: 'عملیات سریع',
@@ -869,7 +922,15 @@
     open: false,
     ui: null,
     videoIndex: 0,
-    videoIndexMap: new Map()
+    renumberTimer: 0,
+    // v3.5.4: size/duration probe
+    probeApplied: '',
+    probeObserver: null,
+    probeQueue: [],
+    probeActive: 0,
+    probeCount: 0,
+    probeBytes: 0,
+    probeControllers: new Set()
   };
 
   const settings = loadSettings();
@@ -880,6 +941,16 @@
   const scheduledVideos = new WeakSet();
   const unsafeVideos = new WeakSet();
   const pendingRemovedRoots = new Set();
+  const probeTargets = new WeakMap();   // placeholder element -> entry (IntersectionObserver lookup)
+  const probeSession = new Map();       // videoKey -> { size, duration } | null (failed); lives until page reload
+
+  // Native references captured before any patching (used by our own code paths).
+  const NATIVE = {
+    load: HTMLMediaElement.prototype.load,
+    play: HTMLMediaElement.prototype.play,
+    fetch: typeof window.fetch === 'function' ? window.fetch.bind(window) : null,
+    setAttribute: Element.prototype.setAttribute
+  };
 
   function setStatus(key, vars, withToast) {
     state.status = { key, vars: vars || null };
@@ -1193,6 +1264,11 @@
       rect.right <= 0 || rect.left >= window.innerWidth;
   }
 
+  /** Set preload=none only when needed: re-writing the same value still queues a mutation record. */
+  function forceNoPreload(media) {
+    if (media.getAttribute('preload') !== 'none') media.preload = 'none';
+  }
+
   function safePause(media) {
     try { media.pause(); } catch (_) {}
   }
@@ -1383,6 +1459,7 @@
       const sizeBadge = document.createElement('span');
       sizeBadge.className = 'shv-video-size';
       sizeBadge.textContent = '';
+      sizeBadge.style.display = 'none';   // v3.5.4: no empty pill until there is something to show
       button.append(sizeBadge);
     }
 
@@ -1391,6 +1468,7 @@
       const infoBadge = document.createElement('span');
       infoBadge.className = 'shv-video-info';
       infoBadge.textContent = '';
+      infoBadge.style.display = 'none';
       button.append(infoBadge);
     }
 
@@ -1434,6 +1512,10 @@
     if (entry.placeholder && entry.placeholder.isConnected) return;
     entry.placeholder = makePlaceholder(entry);
     entry.element.parentNode.insertBefore(entry.placeholder, entry.element);
+    if (entry.kind === 'video' && !entry.audio) {
+      updatePlaceholderInfo(entry);   // v3.5.4: a re-created placeholder shows what the entry already knows
+      probeObserve(entry);
+    }
   }
 
   /* ======================================================================
@@ -1476,10 +1558,23 @@
   }
 
   /**
-   * Commit video deferral: create entry, insert placeholder, load metadata, detach sources.
-   * Handles stable video indexing, Blob/MediaSource detection, and metadata loading.
-   * @param {HTMLVideoElement} video - Video element to defer
-   * @returns {void}
+   * Source info of a video: `directSrc` is what belongs on <video src>, `videoSrc` is the best URL
+   * we know for cache / resume keys (falls back to the first <source>).
+   */
+  function readSourceInfo(video, sources) {
+    let direct = video.getAttribute('src');
+    if (!isUsableURL(direct)) direct = video.getAttribute('data-src');
+    if (!isUsableURL(direct)) direct = video.getAttribute('data-lazy-src');
+    direct = isUsableURL(direct) ? direct : null;
+    const first = sources.map(item => item.src).find(isUsableURL) || null;
+    return { directSrc: direct, videoSrc: direct || first };
+  }
+
+  /**
+   * Commit video deferral: create the entry, insert the placeholder and fully detach the media
+   * resource. Nothing is requested for a locked video: no preload=metadata, no HEAD. The only exception is
+   * videoProbe === 'auto' (v3.5.4), where a card in view may get one or two tiny Range requests (see the
+   * probe section). 'off' (default) requests nothing and does not read the cache; 'cache' only reads it.
    */
   function commitVideoDefer(video) {
     if (!settings.enabled || !lockEnabledFor(video)) return;
@@ -1489,24 +1584,14 @@
     if (hasBlobOrMediaStream(video, sources)) {
       unsafeVideos.add(video);
       video.removeAttribute('autoplay');
-      video.preload = 'none';
+      forceNoPreload(video);
       safePause(video);
       return;
     }
 
     if (!hasUsableVideoSource(video)) return;
 
-    // v3.4.1: Use videoIndexMap to assign consistent index per videoSrc (handles site loading videos twice)
-    // v3.4.2: Get src from multiple possible attributes for lazy-loaded videos
-    let src = video.getAttribute('src');
-    if (!isUsableURL(src)) src = video.getAttribute('data-src');
-    if (!isUsableURL(src)) src = video.getAttribute('data-lazy-src');
-    let videoIndex = state.videoIndexMap.get(src);
-    if (!videoIndex) {
-      videoIndex = ++state.videoIndex;
-      state.videoIndexMap.set(src, videoIndex);
-    }
-
+    const info = readSourceInfo(video, sources);
     const entry = {
       kind: 'video',
       audio: isAudioEl(video),
@@ -1514,15 +1599,21 @@
       loaded: false,
       released: false,
       placeholder: null,
-      videoSrc: src,
+      videoSrc: info.videoSrc,
+      directSrc: info.directSrc,
       sources,
       originalPreload: video.getAttribute('preload'),
       resumeTime: 0,
       pausedAt: 0,
-      videoIndex,
+      videoIndex: 0,
       videoDuration: 0,
       videoSize: 0,
       metadataLoaded: false,
+      sizeRequested: false,
+      cacheState: 0,        // 0 = not looked up, 1 = looking up, 2 = done
+      probeState: '',       // '' | queued | running | done | failed
+      probed: false,        // a probe (or cached probe) already ran for this video
+      inView: false,
       ...videoGeometry(video)
     };
 
@@ -1530,118 +1621,430 @@
     state.mediaEntries.add(entry);
     insertPlaceholder(entry);
 
-    // v3.4.5: Hide video IMMEDIATELY to prevent duplicate video appearing under lock card
-    // This prevents the brief moment where video is visible and starts downloading
+    // Hide first, then cut the network: removing src alone does not abort a load that already began,
+    // so detachVideoSources() also calls the native load() on the now source-less element.
     video.classList.add('shv-suspended-video');
+    detachVideoSources(entry);
+    scheduleRenumber();
 
-    // v3.5.1: Don't use preload=metadata - it triggers unnecessary downloads.
-    // Instead, use 4-layer detection: Cache -> Page metadata -> Range probe -> Video element fallback
-    // Layer 0: Check cache (IndexedDB) for size/duration
-    // Layer 1: Page metadata (unusable on shahvani.com - no duration in HTML)
-    // Layer 2: Range probe (HEAD + Range: bytes=0-0) - async, non-blocking
-    // Layer 3: Video element fallback (when user clicks play)
-    video.removeAttribute('autoplay');
-    video.preload = 'none'; // Explicitly set to none to prevent any preloading
-
-    if (entry.videoSrc && isUsableURL(entry.videoSrc)) {
-      // Layer 0: Check IndexedDB cache first
-      checkVideoCache(entry).then(cached => {
-        if (cached) {
-          // Cache hit - use cached metadata immediately
-          entry.videoDuration = cached.duration || 0;
-          entry.videoSize = cached.size || 0;
-          entry.aspectRatio = cached.aspectRatio || entry.aspectRatio;
-          if (entry.placeholder) {
-            entry.placeholder.style.aspectRatio = String(entry.aspectRatio);
-          }
-          updatePlaceholderInfo(entry);
-        }
-
-        // Layer 2: Range probe for size (async, non-blocking)
-        // Duration will be available when user activates video (Layer 3)
-        window.setTimeout(() => fetchVideoSize(entry), 0);
-      });
-
-      // Don't detach sources yet - wait for user activation to get duration
-      // detachVideoSources(entry) will be called in activateVideo
-    } else {
-      // No usable src, video already hidden, just detach sources
-      detachVideoSources(entry);
-    }
+    // v3.5.4: 'off' does nothing at all; 'cache' / 'auto' read the local cache first (no network).
+    if (probeMode() !== 'off') startCacheLookup(entry);
 
     scheduleUIUpdate();
   }
 
+  /**
+   * File size lookup (HEAD, no body). Called ONLY for a video the user has just opened - never for a
+   * locked one - so the result can be cached for the next visit.
+   */
   function fetchVideoSize(entry) {
+    if (probeMode() === 'off') return;   // v3.5.4: 'off' = no request of ours, ever
     const src = entry.videoSrc;
-    if (!src || !isUsableURL(src)) return;
-    // Use GM_xmlhttpRequest if available (Tampermonkey), fallback to fetch
-    // v3.4.2: Try HEAD first, if no content-length, try GET with Range: bytes=0-0
-    // v3.5.1: Save to cache after successful fetch
-    const doFetch = (url) => {
-      if (typeof GM_xmlhttpRequest === 'function') {
-        GM_xmlhttpRequest({
-          method: 'HEAD',
-          url,
-          onload: r => {
-            const match = r.responseHeaders?.match(/content-length:\s*(\d+)/i);
-            if (match && parseInt(match[1], 10) > 0) {
-              entry.videoSize = parseInt(match[1], 10);
-              updatePlaceholderInfo(entry);
-              saveVideoCache(entry);
-            } else {
-              // v3.4.2: HEAD didn't return content-length, try GET with Range
-              GM_xmlhttpRequest({
-                method: 'GET',
-                url,
-                headers: { 'Range': 'bytes=0-0' },
-                onload: r2 => {
-                  const match2 = r2.responseHeaders?.match(/content-range:\s*bytes\s+\d+-\d+\/(\d+)/i);
-                  if (match2) entry.videoSize = parseInt(match2[1], 10);
-                  else {
-                    const match3 = r2.responseHeaders?.match(/content-length:\s*(\d+)/i);
-                    if (match3) entry.videoSize = parseInt(match3[1], 10);
-                  }
-                  updatePlaceholderInfo(entry);
-                  saveVideoCache(entry);
-                },
-                onerror: () => updatePlaceholderInfo(entry)
-              });
-            }
-          },
-          onerror: () => updatePlaceholderInfo(entry)
-        });
-      } else {
-        fetch(url, { method: 'HEAD', mode: 'cors' })
-          .then(r => {
-            const cl = r.headers.get('content-length');
-            if (cl && parseInt(cl, 10) > 0) {
-              entry.videoSize = parseInt(cl, 10);
-              updatePlaceholderInfo(entry);
-              saveVideoCache(entry);
-            } else {
-              // Try GET with Range
-              return fetch(url, { method: 'GET', mode: 'cors', headers: { 'Range': 'bytes=0-0' } })
-                .then(r2 => {
-                  const cr = r2.headers.get('content-range');
-                  if (cr) {
-                    const match = cr.match(/bytes\s+\d+-\d+\/(\d+)/i);
-                    if (match) entry.videoSize = parseInt(match[1], 10);
-                  } else {
-                    const cl2 = r2.headers.get('content-length');
-                    if (cl2) entry.videoSize = parseInt(cl2, 10);
-                  }
-                  updatePlaceholderInfo(entry);
-                  saveVideoCache(entry);
-                })
-                .catch(() => updatePlaceholderInfo(entry));
-            }
-          })
-          .catch(() => updatePlaceholderInfo(entry));
+    if (!src || !isUsableURL(src) || entry.videoSize > 0 || entry.sizeRequested || !NATIVE.fetch) return;
+    entry.sizeRequested = true;
+    let url;
+    try { url = new URL(src, document.baseURI).href; } catch (_) { return; }
+    NATIVE.fetch(url, { method: 'HEAD', credentials: 'same-origin' }).then(r => {
+      const length = parseInt(r.headers.get('content-length') || '0', 10);
+      if (r.ok && length > 0) {
+        entry.videoSize = length;
+        saveVideoCache(entry);
+        updatePlaceholderInfo(entry);
       }
-    };
-    doFetch(src);
+    }).catch(() => {});
   }
+
+  /* ----------------------------------------------------------------------
+   * Size & duration lookup (v3.5.4)
+   *   off   - nothing is requested and the local cache is not even read (default: the "nothing" rule)
+   *   cache - only what the local cache already knows is shown; no network
+   *   auto  - a card in view that the cache does not know gets one or two tiny Range requests:
+   *           1) bytes 0-16383: size from Content-Range + duration from the mvhd box (when moov is first)
+   *           2) only if moov sits after mdat: ~8 KB exactly at the moov box (offset known from step 1)
+   *           The video itself is never downloaded: the body stream is cancelled once the cap is read.
+   * -------------------------------------------------------------------- */
+
+  function probeMode() {
+    return settings.enabled && settings.showVideoInfo ? settings.videoProbe : 'off';
+  }
+
+  function formatSize(bytes) {
+    if (!(bytes > 0)) return '';
+    const mb = bytes / 1048576;
+    if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+    if (mb >= 1) return mb.toFixed(1) + ' MB';
+    return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+  }
+
+  function formatDuration(sec) {
+    if (!(sec > 0)) return '';
+    const s = Math.floor(sec);
+    const hr = Math.floor(s / 3600);
+    const mi = Math.floor((s % 3600) / 60);
+    const se = s % 60;
+    const two = n => String(n).padStart(2, '0');
+    return hr > 0 ? `${hr}:${two(mi)}:${two(se)}` : `${mi}:${two(se)}`;
+  }
+
+  // <probe-core>
+  function fourcc(buf, at) {
+    return String.fromCharCode(buf[at], buf[at + 1], buf[at + 2], buf[at + 3]);
+  }
+
+  /** Container by magic bytes (the URL extension is not trusted). */
+  function sniffContainer(b) {
+    if (b.length >= 12 && fourcc(b, 4) === 'ftyp') return 'mp4';
+    if (b.length >= 4 && b[0] === 0x1A && b[1] === 0x45 && b[2] === 0xDF && b[3] === 0xA3) return 'ebml';
+    if (b.length >= 8) {
+      const t = fourcc(b, 4);
+      if (t === 'moov' || t === 'mdat' || t === 'free' || t === 'wide' || t === 'skip') return 'mp4';
+    }
+    return '';
+  }
+
+  /** Seconds from the first mvhd box found in buf[start, end); 0 when unknown (e.g. fragmented MP4). */
+  function mvhdDuration(buf, dv, start, end) {
+    let pos = start;
+    end = Math.min(end, buf.length);
+    while (pos + 8 <= end) {
+      const size = dv.getUint32(pos);
+      if (fourcc(buf, pos + 4) === 'mvhd') {
+        let scale = 0;
+        let dur = 0;
+        if (buf[pos + 8] === 1) {                       // version 1: 64-bit times
+          if (pos + 40 > buf.length) return 0;
+          scale = dv.getUint32(pos + 28);
+          const hi = dv.getUint32(pos + 32);
+          const lo = dv.getUint32(pos + 36);
+          if (hi === 0xFFFFFFFF && lo === 0xFFFFFFFF) return 0;
+          dur = hi * 4294967296 + lo;
+        } else {                                        // version 0: 32-bit times
+          if (pos + 28 > buf.length) return 0;
+          scale = dv.getUint32(pos + 20);
+          dur = dv.getUint32(pos + 24);
+          if (dur === 0xFFFFFFFF) return 0;
+        }
+        const seconds = scale > 0 ? dur / scale : 0;
+        return seconds > 0 && seconds < 1e6 ? seconds : 0;
+      }
+      if (size < 8) break;
+      pos += size;
+    }
+    return 0;
+  }
+
+  /**
+   * Walks the top-level MP4 boxes inside `buf` (which starts at file offset `base`).
+   * Returns { duration } when moov is found, otherwise { next } = absolute offset of the first box
+   * that starts after the buffer (where moov will be, when it sits behind a big mdat), or 0 on garbage.
+   */
+  function scanMp4(buf, base) {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const len = buf.length;
+    let pos = 0;
+    while (pos + 8 <= len) {
+      let size = dv.getUint32(pos);
+      const type = fourcc(buf, pos + 4);
+      let header = 8;
+      if (size === 1) {                                 // 64-bit box size
+        if (pos + 16 > len) break;
+        size = dv.getUint32(pos + 8) * 4294967296 + dv.getUint32(pos + 12);
+        header = 16;
+      } else if (size === 0) {                          // "to end of file": only sane for the last box
+        if (type !== 'moov') return { duration: 0, next: 0 };
+        size = len - pos;
+      }
+      if (size < header) return { duration: 0, next: 0 };
+      if (type === 'moov') return { duration: mvhdDuration(buf, dv, pos + header, Math.min(len, pos + size)), next: 0 };
+      pos += size;
+    }
+    return { duration: 0, next: base + pos };
+  }
+
+  /** Minimal EBML (WebM / MKV) reader: Segment > Info > TimecodeScale + Duration. Seconds, 0 if absent. */
+  function scanEbml(b) {
+    let pos = 0;
+    const end = b.length;
+    const readId = () => {                              // keeps the length marker bits
+      if (pos >= end) return -1;
+      const first = b[pos];
+      let n = 1;
+      let mask = 0x80;
+      while (n <= 4 && !(first & mask)) { n++; mask >>= 1; }
+      if (n > 4 || pos + n > end) return -1;
+      let id = 0;
+      for (let i = 0; i < n; i++) id = id * 256 + b[pos + i];
+      pos += n;
+      return id;
+    };
+    const readSize = () => {                            // strips the marker; -1 = error, -2 = unknown size
+      if (pos >= end) return -1;
+      const first = b[pos];
+      let n = 1;
+      let mask = 0x80;
+      while (n <= 8 && !(first & mask)) { n++; mask >>= 1; }
+      if (n > 8 || pos + n > end) return -1;
+      let val = first & (mask - 1);
+      let allOnes = val === mask - 1;
+      for (let i = 1; i < n; i++) {
+        val = val * 256 + b[pos + i];
+        if (b[pos + i] !== 0xFF) allOnes = false;
+      }
+      pos += n;
+      return allOnes ? -2 : val;
+    };
+
+    let timecodeScale = 1000000;
+    let duration = 0;
+    for (let guard = 0; pos < end && guard < 200; guard++) {
+      const id = readId();
+      if (id < 0) break;
+      const size = readSize();
+      if (size === -1) break;
+      if (id === 0x18538067) continue;                  // Segment: descend (its size may be "unknown")
+      if (id === 0x1F43B675) break;                     // Cluster: Info always comes before it
+      if (id === 0x1549A966) {                          // Info: read its children
+        const infoEnd = size < 0 ? end : Math.min(end, pos + size);
+        while (pos < infoEnd) {
+          const cid = readId();
+          if (cid < 0) break;
+          const csize = readSize();
+          if (csize < 0 || pos + csize > end) break;
+          if (cid === 0x2AD7B1) {
+            let v = 0;
+            for (let i = 0; i < csize; i++) v = v * 256 + b[pos + i];
+            if (v > 0) timecodeScale = v;
+          } else if (cid === 0x4489 && (csize === 4 || csize === 8)) {
+            const dv = new DataView(b.buffer, b.byteOffset + pos, csize);
+            duration = csize === 4 ? dv.getFloat32(0) : dv.getFloat64(0);
+          }
+          pos += csize;
+        }
+        break;
+      }
+      if (size < 0) break;                              // unknown size on anything else: cannot skip it
+      pos += size;                                      // EBML header, SeekHead, Void, Tracks, ...
+    }
+    const seconds = duration * timecodeScale / 1e9;
+    return seconds > 0 && seconds < 1e6 ? seconds : 0;
+  }
+
+  /** Reads at most `cap` bytes of the body, then cancels the stream so the rest is never pulled. */
+  async function readCapped(res, cap) {
+    if (!res.body || !res.body.getReader) return new Uint8Array(0);
+    const reader = res.body.getReader();
+    const out = new Uint8Array(cap);
+    let n = 0;
+    try {
+      while (n < cap) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const take = Math.min(value.length, cap - n);
+        out.set(value.subarray(0, take), n);
+        n += take;
+      }
+    } finally {
+      try { const p = reader.cancel(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+    }
+    state.probeBytes += n;
+    return out.subarray(0, n);
+  }
+
+  /** One Range request. total = full file size (Content-Range, or Content-Length if Range was ignored). */
+  async function probeRange(url, start, length, signal) {
+    const res = await NATIVE.fetch(url, {
+      method: 'GET',
+      headers: { Range: 'bytes=' + start + '-' + (start + length - 1) },
+      credentials: 'same-origin',
+      signal
+    });
+    const contentRange = res.headers.get('content-range');
+    const contentLength = parseInt(res.headers.get('content-length') || '0', 10);
+    let total = 0;
+    if (contentRange) {
+      const m = /\/(\d+)\s*$/.exec(contentRange);
+      if (m) total = parseInt(m[1], 10);
+    } else if (res.status === 200 && contentLength > 0) {
+      total = contentLength;
+    }
+    if (!res.ok) {
+      try { if (res.body) { const p = res.body.cancel(); if (p && p.catch) p.catch(() => {}); } } catch (_) {}
+      if (res.status === 416) return { bytes: new Uint8Array(0), total, partial: false };
+      throw new Error('HTTP ' + res.status);
+    }
+    const bytes = await readCapped(res, length);
+    return { bytes, total, partial: res.status === 206 };
+  }
+
+  /** Size + duration of one video URL with at most two small Range requests. */
+  async function probeVideo(url) {
+    const ctl = new AbortController();
+    state.probeControllers.add(ctl);
+    let timedOut = false;
+    const timer = window.setTimeout(() => { timedOut = true; ctl.abort(); }, PROBE_TIMEOUT_MS);
+    try {
+      const first = await probeRange(url, 0, PROBE_HEAD_BYTES, ctl.signal);
+      const result = { size: first.total || 0, duration: 0 };
+      const kind = sniffContainer(first.bytes);
+
+      if (kind === 'mp4') {
+        const a = scanMp4(first.bytes, 0);
+        result.duration = a.duration;
+        // moov sits behind a big mdat: ask for exactly that box (only possible when Range works).
+        if (!a.duration && a.next > 0 && first.partial && (!first.total || a.next < first.total)) {
+          const second = await probeRange(url, a.next, PROBE_TAIL_BYTES, ctl.signal);
+          if (second.partial && second.bytes.length >= 8) result.duration = scanMp4(second.bytes, a.next).duration;
+          if (!result.size && second.total) result.size = second.total;
+        }
+      } else if (kind === 'ebml') {
+        result.duration = scanEbml(first.bytes);
+      }
+      return result;
+    } catch (err) {
+      if (timedOut) throw new Error('timeout');
+      throw err;
+    } finally {
+      window.clearTimeout(timer);
+      state.probeControllers.delete(ctl);
+    }
+  }
+  // </probe-core>
+
+  function probeURL(entry) {
+    if (!entry.videoSrc || !isUsableURL(entry.videoSrc)) return null;
+    try {
+      const u = new URL(entry.videoSrc, document.baseURI);
+      return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
+    } catch (_) { return null; }
+  }
+
+  /** Local cache lookup (IndexedDB, no network). Runs in 'cache' and 'auto' only. */
+  function startCacheLookup(entry) {
+    if (entry.cacheState || entry.kind !== 'video' || entry.audio || !entry.videoSrc) return;
+    entry.cacheState = 1;
+    checkVideoCache(entry).then(cached => {
+      if (probeMode() === 'off') { entry.cacheState = 0; return; }   // switched off meanwhile: retry later
+      entry.cacheState = 2;
+      if (cached && entry.element) {
+        entry.videoDuration = cached.duration || entry.videoDuration;
+        entry.videoSize = cached.size || entry.videoSize;
+        if (cached.probed) entry.probed = true;
+        if (cached.aspectRatio) {
+          entry.aspectRatio = cached.aspectRatio;
+          if (entry.placeholder) entry.placeholder.style.aspectRatio = String(entry.aspectRatio);
+        }
+        updatePlaceholderInfo(entry);
+      }
+      probeConsider(entry);
+    });
+  }
+
+  function probeObserve(entry) {
+    if (probeMode() !== 'auto' || entry.loaded || !entry.placeholder || typeof IntersectionObserver !== 'function') return;
+    if (!state.probeObserver) {
+      state.probeObserver = new IntersectionObserver(records => {
+        for (const rec of records) {
+          const e = probeTargets.get(rec.target);
+          if (!e) continue;
+          e.inView = rec.isIntersecting;
+          if (rec.isIntersecting) probeConsider(e);
+        }
+      }, { rootMargin: PROBE_VISIBLE_MARGIN, threshold: 0.01 });
+    }
+    probeTargets.set(entry.placeholder, entry);
+    state.probeObserver.observe(entry.placeholder);
+  }
+
+  /** Queue a probe when every condition holds: auto mode, in view, cache checked, something still unknown. */
+  function probeConsider(entry) {
+    if (probeMode() !== 'auto') return;
+    if (entry.kind !== 'video' || entry.audio || entry.loaded || !entry.inView || entry.cacheState !== 2) return;
+    if (entry.probeState || entry.probed) return;                      // queued, running, done or failed
+    if (entry.videoSize > 0 && entry.videoDuration > 0) return;        // the cache already knows both
+    if (!probeURL(entry)) return;
+    entry.probeState = 'queued';
+    state.probeQueue.push(entry);
+    probePump();
+  }
+
+  function applyProbeResult(entry, r) {
+    entry.probeState = 'done';
+    entry.probed = true;                                               // remembered, so a file we cannot parse is not probed again
+    if (r && r.size > 0 && !(entry.videoSize > 0)) entry.videoSize = r.size;
+    if (r && r.duration > 0 && !(entry.videoDuration > 0)) entry.videoDuration = r.duration;
+    saveVideoCache(entry);
+    updatePlaceholderInfo(entry);
+    scheduleUIUpdate();
+  }
+
+  function probePump() {
+    if (probeMode() !== 'auto' || document.hidden) return;
+    while (state.probeActive < PROBE_CONCURRENCY && state.probeQueue.length) {
+      const entry = state.probeQueue.shift();
+      // Scrolled away, opened, or removed while waiting: drop it (it is queued again when it returns to view).
+      if (!state.mediaEntries.has(entry) || entry.loaded || !entry.inView) { entry.probeState = ''; continue; }
+
+      const key = hashKey(videoKeyUrl(entry.videoSrc));
+      if (probeSession.has(key)) {                                     // same video already probed on this page
+        const known = probeSession.get(key);
+        if (known) applyProbeResult(entry, known); else entry.probeState = 'failed';
+        continue;
+      }
+      if (state.probeCount >= PROBE_SESSION_MAX) { entry.probeState = 'failed'; continue; }
+
+      const url = probeURL(entry);
+      if (!url) { entry.probeState = 'failed'; continue; }
+
+      entry.probeState = 'running';
+      state.probeActive++;
+      state.probeCount++;
+      probeVideo(url).then(result => {
+        probeSession.set(key, result);
+        applyProbeResult(entry, result);
+      }, err => {
+        if (err && err.name === 'AbortError') { if (entry.probeState === 'running') entry.probeState = ''; return; }
+        entry.probeState = 'failed';                                   // CORS / network / HTTP error: not retried this page
+        probeSession.set(key, null);
+      }).then(() => { state.probeActive--; probePump(); });
+    }
+  }
+
+  function stopProbing() {
+    for (const ctl of state.probeControllers) { try { ctl.abort(); } catch (_) {} }
+    state.probeControllers.clear();
+    for (const e of state.probeQueue) e.probeState = '';
+    state.probeQueue.length = 0;
+    if (state.probeObserver) { try { state.probeObserver.disconnect(); } catch (_) {} state.probeObserver = null; }
+  }
+
+  /** Idempotent: brings the cache lookups / observer / requests in line with the current mode. */
+  function refreshProbeMode() {
+    const mode = probeMode();
+    if (mode === state.probeApplied) return;
+    state.probeApplied = mode;
+
+    if (mode === 'off') {
+      stopProbing();
+      for (const entry of state.mediaEntries) {
+        if (entry.kind !== 'video' || entry.audio) continue;
+        entry.cacheState = 0;
+        entry.probeState = '';
+        entry.inView = false;
+        updatePlaceholderInfo(entry);                                  // hides the badges
+      }
+      return;
+    }
+
+    if (mode === 'cache') stopProbing();                               // auto -> cache: network off, cache stays
+    for (const entry of state.mediaEntries) {
+      if (entry.kind !== 'video' || entry.audio || entry.loaded) continue;
+      startCacheLookup(entry);
+      updatePlaceholderInfo(entry);
+      if (mode === 'auto') probeObserve(entry);
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) probePump(); });
 
   function updatePlaceholderInfo(entry) {
     if (!entry.placeholder || !entry.placeholder.isConnected) return;
@@ -1666,27 +2069,17 @@
 
     if (!sizeEl && !infoEl) return;
 
-    // Update size badge
+    // v3.5.4: badges are shown only while a lookup mode is active ('off' shows nothing)
+    const infoOn = probeMode() !== 'off';
+
     if (sizeEl) {
-      if (entry.videoSize > 0) {
-        const mb = entry.videoSize / (1024 * 1024);
-        sizeEl.textContent = mb >= 1 ? `${mb.toFixed(1)} MB` : `${(entry.videoSize / 1024).toFixed(0)} KB`;
-      } else {
-        sizeEl.textContent = '';
-      }
-      sizeEl.style.display = (settings.showVideoInfo && entry.videoSize > 0) ? '' : 'none';
+      sizeEl.textContent = entry.videoSize > 0 ? formatSize(entry.videoSize) : '';
+      sizeEl.style.display = (infoOn && entry.videoSize > 0) ? '' : 'none';
     }
 
-    // Update duration badge
     if (infoEl) {
-      if (entry.videoDuration > 0) {
-        const m = Math.floor(entry.videoDuration / 60);
-        const s = Math.floor(entry.videoDuration % 60);
-        infoEl.textContent = `${m}:${String(s).padStart(2, '0')}`;
-      } else {
-        infoEl.textContent = '';
-      }
-      infoEl.style.display = (settings.showVideoInfo && entry.videoDuration > 0) ? '' : 'none';
+      infoEl.textContent = entry.videoDuration > 0 ? formatDuration(entry.videoDuration) : '';
+      infoEl.style.display = (infoOn && entry.videoDuration > 0) ? '' : 'none';
     }
   }
 
@@ -1729,7 +2122,7 @@
 
     if (lock || (settings.noAutoplay && !isAudioEl(video))) {
       video.removeAttribute('autoplay');
-      video.preload = 'none';
+      forceNoPreload(video);
       safePause(video);
     }
 
@@ -1749,58 +2142,74 @@
   }
 
   /**
-   * Detach video sources: remove src attribute, preserve data-src/data-lazy-src for site's native lazy-loading.
-   * Also removes src from source elements and autoplay/preload attributes.
-   * @param {Object} entry - Video entry from videoStates WeakMap
-   * @returns {void}
+   * Detach every media resource of a locked video. Per the HTML spec, removing the src attribute does
+   * NOT stop an in-flight load or free the resource - invoking load() on the source-less element does.
    */
   function detachVideoSources(entry) {
     const video = entry.element;
     if (!video) return;
 
     safePause(video);
+    let changed = false;
 
-    // v3.4.3: Only remove 'src' attribute - preserve data-src/data-lazy-src for site's own logic
-    if (video.getAttribute('src') !== null) {
-      entry.videoSrc = video.getAttribute('src');
+    const direct = video.getAttribute('src');
+    if (direct !== null) {
+      if (isUsableURL(direct)) { entry.videoSrc = direct; entry.directSrc = direct; }
       video.removeAttribute('src');
+      changed = true;
     }
-    // Do NOT remove data-src/data-lazy-src - site may need them for re-initialization
+    // data-src / data-lazy-src are only attributes - they cause no request and stay for the site.
 
     for (const item of entry.sources) {
       if (item.node && item.node.hasAttribute('src')) {
         item.src = item.node.getAttribute('src');
         item.node.removeAttribute('src');
+        changed = true;
       }
     }
 
+    // The poster is an image the browser would fetch by itself; the placeholder shows it (if enabled).
+    if (video.hasAttribute('poster')) {
+      if (entry.poster === null || entry.poster === undefined) entry.poster = video.getAttribute('poster');
+      video.removeAttribute('poster');
+    }
+
     video.removeAttribute('autoplay');
-    video.preload = 'none';
-    // v3.4.3: Don't call video.load() - causes unnecessary reload
+    forceNoPreload(video);
+    if (changed || video.networkState !== 0) {
+      try { NATIVE.load.call(video); } catch (_) {}
+    }
   }
 
   /**
-   * Restore video sources: set src attribute back from stored videoSrc, restore source elements.
-   * @param {Object} entry - Video entry from videoStates WeakMap
-   * @returns {void}
+   * Restore the sources of a video the user just opened (entry.loaded is already true here).
    */
   function restoreVideoSources(entry) {
     const video = entry.element;
     if (!video) return;
 
-    if (video.getAttribute('src') === null && entry.videoSrc !== null) {
-      video.setAttribute('src', entry.videoSrc);
-    }
+    if (entry.poster && !video.hasAttribute('poster')) video.setAttribute('poster', entry.poster);
 
+    let restoredSources = 0;
     for (const item of entry.sources) {
       if (item.node && item.node.isConnected && item.src !== null && item.node.getAttribute('src') === null) {
         item.node.setAttribute('src', item.src);
+        restoredSources++;
       }
     }
 
+    let restoredDirect = false;
+    if (video.getAttribute('src') === null && entry.directSrc) {
+      video.setAttribute('src', entry.directSrc);
+      restoredDirect = true;
+    }
+
     video.removeAttribute('autoplay');
-    // v3.5.1: Allow metadata loading on activation (Layer 3 fallback)
     video.preload = 'metadata';
+    // Setting src starts the load by itself; restored <source> attributes do not, so load() is needed.
+    if (!restoredDirect && restoredSources) {
+      try { NATIVE.load.call(video); } catch (_) {}
+    }
   }
 
   /**
@@ -1824,11 +2233,13 @@
     entry.released = false;
     entry.pausedAt = 0;
 
+    if (state.probeObserver && entry.placeholder) { try { state.probeObserver.unobserve(entry.placeholder); } catch (_) {} }
     if (entry.placeholder && entry.placeholder.isConnected) entry.placeholder.remove();
     entry.placeholder = null;
     video.classList.remove('shv-suspended-video');
 
     restoreVideoSources(entry);
+    if (playNow) fetchVideoSize(entry); // only for the video the user just opened
 
     // v3.3.0: Load resume position from IndexedDB
     let resumeTime = entry.resumeTime;
@@ -1910,7 +2321,9 @@
     const saved = entry.sources.find(item => item.node === source);
     if (saved) saved.src = src;
     else entry.sources.push({ node: source, src });
+    if (!entry.videoSrc && isUsableURL(src)) { entry.videoSrc = src; if (probeMode() !== 'off') startCacheLookup(entry); }
     source.removeAttribute('src');
+    if (video.networkState !== 0) { try { NATIVE.load.call(video); } catch (_) {} }
   }
 
   /* ======================================================================
@@ -2054,7 +2467,7 @@
     if (sourceNodes.some(node => isBlobURL(node.getAttribute('src')))) return false;
 
     const direct = video.getAttribute('src');
-    if (isUsableURL(direct)) entry.videoSrc = direct;
+    if (isUsableURL(direct)) { entry.videoSrc = direct; entry.directSrc = direct; }
 
     for (const node of sourceNodes) {
       const src = node.getAttribute('src');
@@ -2191,6 +2604,7 @@
     applyPageTheme();
 
     if (!settings.enabled) {
+      refreshProbeMode();   // v3.5.4: master off -> abort probes before the entries are torn down
       teardown();
       applyUITheme();
       renderAll();
@@ -2227,6 +2641,7 @@
 
     scanMedia(document);
     refreshAllPlaceholders();
+    refreshProbeMode();   // v3.5.4
     applyUITheme();
     renderAll();
     scheduleUIUpdate();
@@ -2276,9 +2691,35 @@
    * 13. DOM tracking and cleanup
    * ==================================================================== */
 
+  /** Video numbers follow DOM order (stable even for <source>-only videos and re-rendered cards). */
+  function scheduleRenumber() {
+    if (state.renumberTimer) return;
+    state.renumberTimer = window.setTimeout(() => { state.renumberTimer = 0; renumberVideos(); }, 50);
+  }
+
+  function renumberVideos() {
+    let n = 0;
+    for (const el of document.querySelectorAll('video')) {
+      const entry = videoStates.get(el);
+      if (!entry || entry.audio || entry.kind !== 'video') continue;
+      entry.videoIndex = ++n;
+      const ph = entry.placeholder;
+      if (!ph || !ph.isConnected) continue;
+      let badge = ph.querySelector('.shv-video-index');
+      if (!settings.showVideoIndex) { if (badge) badge.remove(); continue; }
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'shv-video-index';
+        ph.append(badge);
+      }
+      badge.textContent = String(n);
+    }
+  }
+
   function forgetEntry(entry) {
     state.mediaEntries.delete(entry);
     state.cleanedEntries++;
+    scheduleRenumber();
 
     if (entry.element) {
       if (entry.kind === 'video') videoStates.delete(entry.element);
@@ -2436,6 +2877,11 @@
       }
 
       const entry = videoStates.get(target);
+      if (entry && attributeName === 'preload') {
+        // A locked video must never be allowed to preload (site scripts like to set preload=auto).
+        if (!entry.loaded) forceNoPreload(target);
+        return;
+      }
       if (entry) {
         // v3.4.3: Only handle 'src' attribute for loaded videos - preserve data-src/data-lazy-src
         if (!entry.loaded && attributeName === 'src' && isUsableURL(target.getAttribute('src'))) {
@@ -2445,7 +2891,9 @@
             activateVideo(entry, false, true);
           } else {
             entry.videoSrc = value;
+            entry.directSrc = value;
             target.removeAttribute('src');
+            try { NATIVE.load.call(target); } catch (_) {}
           }
         } else if (entry.loaded && attributeName === 'src' && isUsableURL(target.getAttribute('src'))) {
           entry.videoSrc = target.getAttribute('src');
@@ -2455,7 +2903,7 @@
       }
 
       // v3.4.3: Only defer on 'src' and 'autoplay' changes, not on data-src/data-lazy-src
-      if (attributeName === 'src' || attributeName === 'autoplay') deferVideo(target);
+      if (attributeName === 'src' || attributeName === 'autoplay' || attributeName === 'preload') deferVideo(target);
       return;
     }
 
@@ -2528,6 +2976,7 @@
       url: location.origin + location.pathname,
       userAgent: navigator.userAgent,
       stats: { ...collectStats(), blockedScripts: state.blockedScripts, blockedRequests: state.blockedRequests, popups: state.popupsBlocked },
+      probe: { mode: probeMode(), requests: state.probeCount, bytesRead: state.probeBytes },
       settings
     }, null, 1);
   }
@@ -2551,8 +3000,23 @@
     const media = event.target;
     if (!(media instanceof HTMLMediaElement)) return;
     const entry = videoStates.get(media);
-    if (entry && entry.loaded) entry.pausedAt = Date.now();
+    if (entry && entry.loaded) { entry.pausedAt = Date.now(); saveResumeNow(entry); }
   }, true);
+
+  // Resume position is saved on pause and when the page is hidden/closed (not only on "release").
+  function saveResumeNow(entry) {
+    const video = entry && entry.element;
+    if (!video || !settings.enabled || !settings.resumePosition || !entry.videoSrc) return;
+    try {
+      const t = video.currentTime, d = video.duration;
+      if (Number.isFinite(t) && t > 3 && (!Number.isFinite(d) || d - t > 3)) {
+        idbSaveResumePosition(entry.videoSrc, location.href, t, d);
+      }
+    } catch (_) {}
+  }
+  window.addEventListener('pagehide', () => {
+    for (const entry of state.mediaEntries) if (entry.kind === 'video' && entry.loaded) saveResumeNow(entry);
+  });
 
   document.addEventListener('play', event => {
     const video = event.target;
@@ -2595,6 +3059,72 @@
     if (!settings.enabled || !settings.pauseHidden || !document.hidden) return;
     document.querySelectorAll('video, audio').forEach(media => { if (!media.paused) safePause(media); });
   });
+
+
+  /* ----------------------------------------------------------------------
+   * Media guards (v3.5.3)
+   * A MutationObserver only sees elements after the fact. These guards close the remaining gaps:
+   * videos created / driven by site JS (document.createElement('video'), preload='auto', load(),
+   * play(), autoplay) can no longer start a download while the video is still locked.
+   * -------------------------------------------------------------------- */
+
+  /** True while a media element must not touch the network (locked, or an unseen video). */
+  function isLockedMedia(el) {
+    if (!settings.enabled || !(el instanceof HTMLMediaElement) || unsafeVideos.has(el)) return false;
+    const entry = videoStates.get(el);
+    if (entry) return !entry.loaded;
+    if (el instanceof HTMLVideoElement && settings.lockVideo) {
+      // MediaSource / blob players are driven by the site and are left alone.
+      return !(el.srcObject || isBlobURL(el.getAttribute('src')));
+    }
+    return false;
+  }
+
+  try {
+    const mp = HTMLMediaElement.prototype;
+
+    mp.load = function () {
+      if (isLockedMedia(this)) return;
+      return NATIVE.load.apply(this, arguments);
+    };
+
+    mp.play = function () {
+      if (isLockedMedia(this)) {
+        return Promise.reject(new DOMException('Video is locked by Shahvani Ultra Lite', 'NotAllowedError'));
+      }
+      return NATIVE.play.apply(this, arguments);
+    };
+
+    for (const [prop, locked] of [['preload', 'none'], ['autoplay', false]]) {
+      const desc = Object.getOwnPropertyDescriptor(mp, prop);
+      if (!desc || !desc.set || !desc.get) continue;
+      Object.defineProperty(mp, prop, {
+        configurable: true,
+        enumerable: desc.enumerable,
+        get: desc.get,
+        set(value) { desc.set.call(this, isLockedMedia(this) ? locked : value); }
+      });
+    }
+
+    mp.setAttribute = function (name, value) {
+      if (typeof name === 'string' && isLockedMedia(this)) {
+        const key = name.toLowerCase();
+        if (key === 'autoplay') return;
+        if (key === 'preload') value = 'none';
+      }
+      return NATIVE.setAttribute.call(this, name, value);
+    };
+
+    // Elements created by script start life with preload="none".
+    const nativeCreateElement = Document.prototype.createElement;
+    Document.prototype.createElement = function () {
+      const el = nativeCreateElement.apply(this, arguments);
+      try {
+        if (el instanceof HTMLVideoElement && settings.enabled && settings.lockVideo) NATIVE.setAttribute.call(el, 'preload', 'none');
+      } catch (_) {}
+      return el;
+    };
+  } catch (_) {}
 
   function scriptBlocked(src) {
     const blocked = settings.enabled && settings.blockAdScripts && isBlockedNetworkURL(String(src), settings.blockTrackers);
@@ -3023,7 +3553,7 @@
 
     const kv = h('div', { class: 'kv' });
     for (const [id, label] of [['filteredAds', 'filteredAds'], ['blockedScripts', 'blockedScripts'], ['blockedRequests', 'blockedRequests'],
-      ['popups', 'popupsBlocked'], ['resources', 'resources'], ['cleanedEntries', 'cleaned'], ['detachedEntries', 'detached']]) {
+      ['popups', 'popupsBlocked'], ['resources', 'resources'], ['cleanedEntries', 'cleaned'], ['detachedEntries', 'detached'], ['probeStat', 'probeTraffic']]) {
       kv.append(h('span', { text: t(label) }), h('span', { 'data-k': id, text: '-' }));
     }
     f.append(section(t('secStats'), kv));
@@ -3155,6 +3685,8 @@
     f.append(section(t('secVideoMeta'), h('div', { class: 'pad' },
       checkRow('showVideoIndex', t('showVideoIndex'), t('showVideoIndexD'), dim()),
       checkRow('showVideoInfo', t('showVideoInfo'), t('showVideoInfoD'), dim()),
+      segment(t('probeMode'), settings.videoProbe, [['off', t('probeOff')], ['cache', t('probeCache')], ['auto', t('probeAuto')]], v => setOpt('videoProbe', v)),
+      h('div', { class: 'note', text: t('probeModeD') }),
       checkRow('invertedNeumorphic', t('invertedNeumorphic'), t('invertedNeumorphicD'), dim()))));
 
     f.append(section(t('secLayout'),
@@ -3247,7 +3779,8 @@
       pendingFrames: stats.pendingFrames, activeFrames: stats.activeFrames,
       filteredAds: stats.filteredAds, blockedScripts: state.blockedScripts, blockedRequests: state.blockedRequests,
       popups: state.popupsBlocked, resources: stats.resources === null ? '-' : stats.resources,
-      cleanedEntries: stats.cleanedEntries, detachedEntries: stats.detachedEntries
+      cleanedEntries: stats.cleanedEntries, detachedEntries: stats.detachedEntries,
+      probeStat: state.probeCount ? `${state.probeCount} · ${formatSize(state.probeBytes) || '0 KB'}` : '0'
     };
     ui.body.querySelectorAll('[data-k]').forEach(node => {
       const value = values[node.getAttribute('data-k')];
@@ -3348,45 +3881,49 @@
     if (state.initialized || !document.documentElement) return;
     state.initialized = true;
 
-    // Load settings from IndexedDB (async)
-    idbLoadSettings().then(idbSettings => {
-      if (idbSettings) {
-        Object.assign(settings, sanitize(idbSettings, { ...DEFAULTS, customAdHosts: [] }));
-        saveSettings(); // sync to localStorage
-      }
-      initializeAfterSettings();
-    }).catch(() => initializeAfterSettings());
-
-    // Initial synchronous setup with current settings
     addStyle();
     updateDynamicStyle();
     applyPageTheme();
+
+    // v3.5.3: everything that locks media starts synchronously. Nothing waits for storage -
+    // in 3.5.2 the observer was only attached after IndexedDB opened, so videos had already begun loading.
+    initializeNow();
+
+    // IndexedDB only keeps a backup of the settings; adopt it if localStorage was empty (cleared / private).
+    idbLoadSettings().then(idbSettings => {
+      if (!idbSettings || settingsFromLocalStorage) return;
+      Object.assign(settings, sanitize(idbSettings, { ...DEFAULTS, customAdHosts: [] }));
+      saveSettings();
+      applyAll();
+    }).catch(() => {});
   }
 
-  function initializeAfterSettings() {
+  function initializeNow() {
     const root = document.documentElement;
+
+    // Observer first, so nothing added after this line can slip past the initial scan.
+    state.observer = new MutationObserver(onMutations);
+    state.observer.observe(root, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['src', 'srcdoc', 'autoplay', 'preload']
+    });
+
     if (settings.enabled) {
       root.classList.add('shv-ultralite');
       root.classList.toggle('shv-lite-effects', settings.calmMotion);
       root.classList.toggle('shv-ultra-mode', settings.smartCards);
       root.classList.toggle('shv-cosmetic-ads', settings.cosmeticAds);
       root.classList.toggle('shv-flat', settings.flatEffects);
+      scanMedia(document);
       if (settings.lazyImages || settings.asyncDecode) optimizeAllImages();
       if (settings.smartCards) optimizeRepeatedCards(document);
-      scanMedia(document);
       scanVisuals(document);
     }
 
     if (document.body) createPanel();
     else document.addEventListener('DOMContentLoaded', createPanel, { once: true });
-
-    state.observer = new MutationObserver(onMutations);
-    state.observer.observe(document.documentElement, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ['src', 'srcdoc', 'autoplay', 'data-src', 'data-lazy-src']
-    });
 
     window.setInterval(autoReleaseTick, AUTO_RELEASE_INTERVAL_MS);
 
@@ -3397,7 +3934,6 @@
       else if (mediaQuery.addListener) mediaQuery.addListener(onThemeChange);
     } catch (_) {}
 
-    // Apply theme preset
     applyThemePreset();
   }
 
@@ -3424,6 +3960,7 @@
   if (window.__SHV_TEST__) {
     Object.assign(window.__SHV_TEST__, {
       state, settings, T, DEFAULTS, KNOWN_AD_HOSTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
+      videoStates, activateVideo, releaseInactiveNow, hashKey, videoKeyUrl, isLockedMedia,
       // Internal test functions
       testSanitize: (input) => sanitize(input, { ...DEFAULTS, customAdHosts: [] }),
       testIsUsableURL: (raw) => isUsableURL(raw),
@@ -3434,8 +3971,13 @@
   if (document.documentElement) {
     start();
   } else {
-    document.addEventListener('readystatechange', () => {
-      if (document.documentElement) start();
+    // At document-start <html> may not exist yet. Wait for it with a MutationObserver (fires the moment the
+    // parser creates <html>); the old readystatechange fallback only fired after the whole page was parsed,
+    // by which time every video in the HTML had already started loading.
+    const boot = new MutationObserver(() => {
+      if (document.documentElement) { boot.disconnect(); start(); }
     });
+    boot.observe(document, { childList: true });
+    document.addEventListener('readystatechange', () => { if (document.documentElement) { boot.disconnect(); start(); } });
   }
 })();

@@ -4,22 +4,27 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 
 **Author:** parham  
 **Homepage:** https://github.com/parhamghahremani  
-**Version:** 3.5.0
+**Version:** 3.5.4
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
 | **Tap-to-load media** | Videos and iframes replaced with placeholders; load only on user tap |
+| **Zero-download locking** | Video sources removed + native `load()` + browser guards; nothing downloads until click |
+| **4-layer metadata detection** | IndexedDB cache → Page metadata → Range probe → Video element `loadedmetadata` |
+| **Optional size/duration probe** | `off` (default, zero network) / `cache` (local only) / `auto` (IntersectionObserver + capped Range) |
 | **Performance profiles** | Compatible / Balanced / Ultra — escalating optimizations |
-| **Tabbed control panel** | Overview (profiles, diagnostics, emergency), Media (ad filter, batch load, resource release), Appearance (theme, compact mode) |
+| **Tabbed control panel** | Overview, Media, Look, Data, Network, Privacy, Settings |
 | **Theme system** | System / Dark / Light with CSS variables, instant switch |
 | **Ad host filtering** | Known ad domains (doubleclick, googlesyndication, taboola, etc.) |
+| **Video resume** | Position saved to IndexedDB on pause/pagehide, restored on next visit |
 | **Manual resource release** | One-click release of paused videos + off-screen iframes |
 | **Emergency mode** | Instantly pause all HTML videos, block deferred activation |
 | **Diagnostics** | Long task monitoring, resource count, cleaned entries tracking |
 | **Detached node cleanup** | Memory leak prevention for SPA/AJAX content |
-| **Persian RTL UI** | Full RTL support, accessibility attributes |
+| **Bilingual EN/FA UI** | Full RTL support, accessibility attributes |
+| **FAB with drag** | Floating action button, vertical drag, side preference saved |
 
 ## Installation
 
@@ -34,14 +39,26 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 
 ## Configuration
 
-Settings persist in `localStorage` (`shvUltraLite.settings.v3`):
+Settings persist in `localStorage` (`shvUltraLite.settings.v3`) and IndexedDB (`shvUltraLiteDB.settings`):
 
 ```javascript
 {
-  profile: 'balanced',        // 'compatible' | 'balanced' | 'ultra'
-  hideKnownAds: true,         // filter known ad iframes
-  theme: 'system',            // 'system' | 'dark' | 'light'
-  compact: false              // compact panel mode
+  profile: 'balanced',           // 'compatible' | 'balanced' | 'ultra'
+  hideKnownAds: true,            // filter known ad iframes
+  theme: 'system',               // 'system' | 'dark' | 'light'
+  compact: false,                // compact panel mode
+  showVideoInfo: true,           // show size/duration badges
+  videoProbe: 'off',             // 'off' | 'cache' | 'auto'
+  side: 'right',                 // FAB side: 'left' | 'right'
+  fabY: null,                    // FAB vertical position (auto if null)
+  lang: 'fa',                    // 'en' | 'fa'
+  batchSize: 10,                 // load visible players batch
+  showPoster: true,              // show poster in placeholder
+  accent: 'blue',                // UI accent color
+  preset: 'default',             // UI preset
+  lazyImages: true,              // lazy-load off-screen images
+  showPlaceholders: true,        // show placeholders instead of hiding
+  blockScripts: true             // block ad scripts via beforescriptexecute (FF)
 }
 ```
 
@@ -55,7 +72,7 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 | **Balanced** | Animation/transition duration → 0.001ms | Lazy + fetchpriority=low (off-screen) | No |
 | **Ultra** | Same as Balanced | Same | `content-visibility: auto` on repeated cards |
 
-## Panel Controls
+## Panel Controls (7 Tabs)
 
 ### Overview Tab
 - **Profile buttons** — switch performance profile
@@ -70,56 +87,126 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 - **Pause all videos** — immediate pause of all HTML5 videos
 - **Release inactive** — detach sources from paused videos + off-screen iframes
 
-### Appearance Tab
+### Look Tab
 - **Theme** — System / Dark / Light
 - **Compact mode** — smaller panel, hides descriptions
-- **Reset settings** — back to defaults
+- **Video info badges** — toggle size/duration display
+- **Video probe mode** — Off / Cache only / Auto (when showVideoInfo on)
+- **FAB side** — Left / Right
+- **Language** — English / Persian
+- **Accent color** — Blue / Green / Amber / Red / Purple / Teal
+- **Show poster** — Toggle poster in placeholder
+
+### Data Tab
+- **Resume positions** — view/clear saved video positions
+- **Video metadata cache** — view/clear cached size/duration
+- **Export/Import settings** — JSON backup/restore
+- **Clear all data** — nuclear option
+
+### Network Tab
+- **Blocked requests log** — recent blocked resource requests
+- **Filter by domain** — search blocked list
+- **Clear log** — reset blocked requests
+
+### Privacy Tab
+- **Script blocking** — toggle `beforescriptexecute` ad script blocking
+- **Popup blocking** — toggle window.open/alert/confirm/prompt blocking
+- **Resource cleaning** — toggle detached node cleanup
+
+### Settings Tab
+- **Version info** — current version, build date
+- **Check for updates** — link to GitHub releases
+- **Debug info** — internal state dump
 
 ## How It Works
 
 1. **`@run-at document-start`** — injects CSS immediately, adds `shv-ultralite` class to `<html>`
-2. **Initial scan** — finds all `video`, `iframe`, `img` elements
-3. **Video deferral** — captures geometry (aspectRatio, poster), replaces with placeholder button, removes `src`/`autoplay`, sets `preload=none`
-4. **Iframe deferral** — captures src/srcdoc, replaces with placeholder, sets `loading=lazy`
-5. **Image optimization** — off-screen images get `loading=lazy` + `fetchpriority=low`
-6. **MutationObserver** — watches for new media (`childList`) and attribute changes (`src`, `srcdoc`, `autoplay`)
-6. **Play interception** — blocks non-user-initiated playback via `play` event capture
-7. **Panel UI** — FAB creates floating panel with stats and controls
+2. **Simultaneous startup** — MutationObserver on `document` waits for `<html>`, then locks all videos instantly
+3. **Video locking** — captures geometry (aspectRatio, poster), replaces with placeholder button, removes `src`/`<source src>`/`autoplay`/`poster`, sets `preload=none`, calls native `load()`
+4. **Browser guards** — intercepts `load()`/`play()` on locked videos, forces `preload=none`, ignores `autoplay`
+5. **Iframe deferral** — captures src/srcdoc, replaces with placeholder, sets `loading=lazy`
+6. **Image optimization** — off-screen images get `loading=lazy` + `fetchpriority=low`
+7. **MutationObserver** — watches for new media (`childList`) and attribute changes (`src`, `srcdoc`, `autoplay`)
+8. **Play interception** — blocks non-user-initiated playback via `play` event capture
+9. **On user click** — restores sources → HEAD for size cache (if probe enabled) → `preload=metadata` → play
+10. **Optional probe** — `videoProbe: 'auto'` queues Range requests via IntersectionObserver, reads 16 KB header + 8 KB moov tail, cancels stream before video body downloads
+11. **Panel UI** — FAB creates floating panel with stats and controls
 
 ## Version History
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| **3.5.4** | 2026-11-18 | Optional probe (off/cache/auto), IntersectionObserver, MP4/EBML parsing, stream cancellation |
+| **3.5.3** | 2026-11-18 | Zero-download guarantee, deterministic keys, browser guards, IndexedDB v2 resume |
+| **3.5.2** | 2026-11-17 | preloadFirstNForDuration (removed in v3.5.3) |
+| **3.5.1** | 2026-11-17 | IndexedDB videoMetadata cache, 4-layer detection, hashKey, domain profiles removed |
+| **3.5.0** | 2026-11-17 | Author metadata, custom icon |
+| **3.4.6** | 2026-11-14 | Constants, JSDoc, test functions |
+| **3.4.5** | 2026-11-04 | Removed keyboard shortcuts, fixed duplicate video |
+| **3.4.4** | 2026-11-04 | Removed video.load(), fixed numbering, lazy-load respect |
+| **3.4.3** | 2026-11-04 | Duration fix, Range fallback, data-src support |
+| **3.4.2** | 2026-11-04 | Duration immediate, metadata on release, dual badges |
+| **3.4.1** | 2026-11-04 | videoIndexMap, metadata display, Persian translations |
+| **3.4.0** | 2026-11-04 | Video numbering, metadata badges, inverted neumorphic |
+| **3.3.0** | 2026-11-04 | IndexedDB, resume, profiles, shortcuts, themes |
+| **3.2.0** | 2026-11-04 | v6 engine + v3 UI merge |
+| **3.1.0** | 2026-11-04 | Neumorphic UI, i18n, FAB |
 | **3.0.0** | 2026-11-03 | Tabbed panel, themes, compact mode, emergency mode, diagnostics, srcdoc support, detached cleanup |
 | **2.0.0** | 2026-11-03 | Profiles, manual release, batch load, repeated cards, settings persistence |
 | **1.0.0** | 2026-11-03 | Initial: tap-to-load video/iframe, ad filtering, FAB panel |
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 
-## Development
+## Workspace Structure
 
-### Workspace Structure
 ```
 shahvani-ultra-lite/
 ├── src/
-│   └── shahvani-ultra-lite.user.js   # Current production (v3.0.0)
+│   └── shahvani-ultra-lite.user.js   # Current production (edit here)
 ├── versions/
-│   ├── v1.0.0.user.js
-│   ├── v2.0.0.user.js
-│   └── v3.0.0.user.js
+│   ├── v1.0.0.user.js ... v3.5.4.user.js
+├── docs/
+│   ├── SPECIFICATION.md
+│   ├── ARCHITECTURE.md
+│   ├── DEVELOPMENT_GUIDE.md
+│   ├── CONFIGURATION_AND_PERMISSIONS.md
+│   ├── COMPATIBILITY.md
+│   ├── MANUAL_TEST_PLAN.md
+│   ├── DEVELOPMENT_LOG.md
+│   ├── DECISIONS.md
+│   ├── KNOWN_ISSUES.md
+│   └── REFERENCES.md
+├── backups/
+│   ├── imported-original/
+│   ├── pre-change/
+│   ├── full-snapshots/
+│   ├── releases/
+│   ├── git-bundles/
+│   ├── checksums/
+│   └── BACKUP_MANIFEST.md
 ├── tests/
-│   └── screenshots/
+├── .claude/
+│   └── launch.json
 ├── CHANGELOG.md
-├── LEARNED.md
-└── README.md
+├── README.md
+├── PROJECT_STATUS.md
+├── package.json
+├── .gitignore
+└── .git/
 ```
+
+## Development
 
 ### Versioning Workflow
 1. Edit `src/shahvani-ultra-lite.user.js`
-2. Bump `@version` in metadata block
+2. Bump `@version` in metadata block + `VERSION` constant + `package.json` + `README.md`
 3. Copy to `versions/vX.Y.Z.user.js`
 4. Update `CHANGELOG.md`
-5. Update `LEARNED.md` with new findings
+5. Create backups (pre-change, ZIP, git bundle, update manifest)
+5. `node --check src/shahvani-ultra-lite.user.js`
+6. Manual test on shahvani.com (Firefox + Tampermonkey)
+7. `git commit -am "vX.Y.Z: ..." && git tag vX.Y.Z`
+8. User approval → `gh repo create parhamghahremani/shahvani-ultra-lite --private --source=. --push`
 
 ## Known Ad Hosts (Filtered)
 

@@ -293,7 +293,85 @@ All notable changes to this project will be documented in this format.
 
 ---
 
-## [3.5.0] - 2026-11-14
+## [3.5.3] - 2026-11-18
+
+### Added
+- **Zero-download video locking** — complete prevention of any video data transfer before explicit user click. Verified 0 requests / 0 bytes for locked videos across all test scenarios (5 videos with `src`, 3 with `<source>`, lazy-loaded `data-src`, site JS `preload=auto`/`load()`/`play()`, SPA rendering, dynamic JS additions, 30 videos in large page).
+- **Simultaneous startup at `document-start`** — MutationObserver on `document` waits for `<html>` before any scanning; observer created before initial scan; nothing waits for IndexedDB initialization.
+- **True source removal with native `load()`** — locked videos have `src` and `<source src>` removed, `poster` removed, `preload=none`, and native `load()` called to abort in-flight loads per HTML spec.
+- **Browser-level guards for locked/unseen videos** — `load()` and `play()` blocked, `preload` forced to `none`, `autoplay` ignored, videos created via `createElement` start with `preload=none`. Blob/MediaSource videos left untouched.
+- **HEAD/Range only after click on same video** — size probe runs only when user clicks a locked video; no network requests during locking.
+- **Deterministic FNV-1a `hashKey()`** — replaces `Date.now()`-based key; stable across sessions, enables true cache hits.
+- **IndexedDB v2 with per-video resume** — `IDB_VERSION=2`, new `videoMetadata` store, cache save on pause and `pagehide`, per-video (not per-page) resume.
+- **DOM-order video numbering** — stable index assigned per unique video in DOM order; fixed `<source>`-only videos all showing index 1.
+
+### Fixed
+- **v3.5.2 downloaded videos despite locking** — root causes eliminated: early startup, `preloadFirstNForDuration` removed, `fetchVideoSize` removed from lock path, `src` removal + `load()` call, browser guards, IDB v2 with deterministic keys.
+- **Video size/duration from cache on revisit** — instant display from IndexedDB without any network request (verified 2.7 MB size + 0:12 duration from cache on second visit).
+- **Double-encoded HTML entities** — `html.unescape()` called twice for index/alt text.
+- **Infinite mutation loop** — writing `preload=none` twice no longer creates new mutation records.
+- **Missing i18n keys** — added `emergency`, `reload`, `blockedScripts`, `blockedRequests`, `popupsBlocked`, `resources`, `cleaned`, `detached`; fixed typo "است اسکریپت" → "اسکریپت است".
+
+### Removed
+- **`preloadFirstNForDuration` setting entirely** — configuration, UI control in Look tab, menu row, and all related logic (the menu row had no handler).
+- **HEAD/Range probes from lock path** — `fetchVideoSize` no longer runs during locking.
+- **`data-src`/`data-lazy-src` handling** — removed as noise attributes.
+
+### Changed
+- **Video deferral flow**: Simultaneous observer + scan → lock with `src`/`<source>` removal + `load()` → on click: restore sources → HEAD for size cache → `preload=metadata` → play.
+- **State**: Added `preloadedForDuration` counter removed; `videoIndexMap` now stable DOM-order.
+- **Bundle size**: ~112KB (similar, code restructuring offset additions)
+
+---
+
+## [3.5.4] - 2026-11-18
+
+### Added
+- **Optional size/duration probe (`videoProbe` setting)** — three modes:
+  - `off` (default): zero network requests for locked videos, cache not read — strict "nothing" rule
+  - `cache`: reads local IndexedDB cache only, no network
+  - `auto`: for cards in view with no cache, issues up to two tiny Range requests (first 16 KB header, then ~8 KB at moov box if behind mdat) to read size and duration; the video body stream is cancelled once the cap is read — the video itself is never downloaded
+- **Probe concurrency control** — `PROBE_CONCURRENCY=2`, session cap `PROBE_SESSION_MAX=120` (~3 MB worst case), per-page session cache (`probeSession`) to avoid re-probing same video
+- **IntersectionObserver integration** — probe only queues for cards in view (200px margin); scrolled-away cards drop from queue
+- **New i18n keys** — `probeMode`, `probeModeD`, `probeOff`, `probeCache`, `probeAuto`, `probeTraffic` (EN/FA)
+- **UI control in Look tab → Video Metadata** — dropdown with Off / Cache only / Auto, enabled when `showVideoInfo` is on
+
+### Changed
+- **Video deferral flow**: `commitVideoDefer` → placeholder insert → `probeObserve` (auto mode) → cache lookup (cache/auto) → probe queue when in view → `detachVideoSources` with native `load()` call. Locked videos in `off` mode (default) do **nothing** at all: no preload=metadata, no HEAD, no Range, no cache read.
+- **`fetchVideoSize`** — now only runs after user clicks a locked video (to cache size for next visit); never during locking.
+- **`saveVideoCache` merge logic** — values learned in any mode merge with existing cache; a value learned in `off` mode never erases one learned earlier.
+- **`updatePlaceholderInfo`** — badges hidden until they have content; no empty pills shown.
+- **Settings** — new `videoProbe` enum (`off` | `cache` | `auto`), default `off`. Requires `showVideoInfo` enabled.
+- **Bundle size**: ~118KB (+6KB for probe core, IntersectionObserver, EBML/MP4 parsing)
+
+### Fixed
+- **v3.5.3 cache key stability** — confirmed `hashKey` (FNV-1a) is deterministic; `IDB_VERSION=2` retained.
+- **Probe never downloads the video** — body stream cancelled via `reader.cancel()` after reading the capped bytes (16 KB header, 8 KB tail).
+- **Infinite mutation loop** — `forceNoPreload` only writes when value changes.
+- **Probe re-queues on scroll** — card scrolled away and back re-enters view and is considered again.
+
+---
+
+## [3.5.3] - 2026-11-18
+
+### Added
+- **Instant duration display for first N videos** — new `preloadFirstNForDuration` setting (default: 3) uses `preload="metadata"` on first N deferred videos to get duration immediately via `loadedmetadata` event without full download.
+- **`preloadFirstNForDuration` UI control** — number input in Look tab → Video Metadata section (range: 0-20).
+- **Cache population on metadata load** — when `loadedmetadata` fires during preload, duration/aspectRatio saved to IndexedDB cache for instant display on subsequent visits.
+
+### Fixed
+- **Duration not showing until user plays video** — Layer 3 (`loadedmetadata` on user activation) now supplemented by preload for first N videos, eliminating need for manual play to see duration.
+- **Double-encoded HTML entities in tooltip** — `html.unescape()` called twice for index/alt text.
+- **Cache key Unicode errors** — confirmed `hashKey()` handles all video URLs correctly.
+
+### Changed
+- **Video deferral flow**: First N videos get `preload="metadata"` instead of `preload="none"`; rest remain `preload="none"`.
+- **State**: Added `preloadedForDuration` counter to track preloaded videos per session.
+- **Bundle size**: ~112KB (+1KB for preload logic and UI control)
+
+---
+
+## [3.5.1] - 2026-11-17
 
 ### Added
 - **Author metadata** — `@author` set to "parham", `@homepageURL` to https://github.com/parhamghahremani
