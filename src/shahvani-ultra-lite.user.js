@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Shahvani Ultra Lite
 // @namespace    local.shahvani.ultralite
-// @version      3.5.4
-// @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, performance profiles, IndexedDB storage, theme presets, video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
+// @version      3.5.5
+// @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme presets, video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
 // @author       parham
 // @homepageURL  https://github.com/parhamghahremani
 // @match        *://shahvani.com/*
@@ -15,7 +15,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '3.5.4';
+  const VERSION = '3.5.5';
   const KEY = 'shvUltraLite.settings.v3';
   const LEGACY_KEYS = ['shvUltraLite.settings.v2'];
   const IDB_NAME = 'shvUltraLiteDB';
@@ -114,7 +114,7 @@
     compact: false,
     calmMenu: false,
     side: 'left',
-    y: 0.8,
+    fabY: 1,   // v3.5.5: vertical position of the button: 0 = top ... 1 = bottom (default: bottom corner)
     idle: 0.9,
 
     // v3.3.0 features
@@ -187,12 +187,12 @@
             .filter(x => typeof x === 'string')
             .map(x => x.trim().toLowerCase())
             .filter(x => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(x))))
-            .slice(0, MAX_ID_LENGTH);
+            .slice(0, MAX_CUSTOM_AD_HOSTS);
         }
       } else if (key === 'accent') {
         if (typeof val === 'string' && /^#[0-9a-f]{6}$/i.test(val)) out[key] = val.toLowerCase();
-      } else if (key === 'y') {
-        if (typeof val === 'number' && val >= 0.06 && val <= 0.94) out[key] = val;
+      } else if (key === 'fabY') {
+        if (typeof val === 'number' && val >= 0 && val <= 1) out[key] = val;
       } else if (key === 'idle') {
         if (typeof val === 'number' && val >= 0.3 && val <= 1) out[key] = val;
       } else if (ENUMS[key]) {
@@ -367,6 +367,19 @@
         req.onerror = () => resolve(null);
       });
     }).catch(() => Promise.resolve(null));
+  }
+
+  /**
+   * v3.5.5: Remove the saved resume position of a video (finished videos must start over next time).
+   * @param {string} videoSrc - Video source URL
+   * @returns {void}
+   */
+  function idbDeleteResumePosition(videoSrc) {
+    if (!videoSrc) return;
+    idbInit().then(db => {
+      const tx = db.transaction('resumePositions', 'readwrite');
+      tx.objectStore('resumePositions').delete(hashKey(videoKeyUrl(videoSrc)));
+    }).catch(() => {});
   }
 
   /**
@@ -867,8 +880,8 @@
       probeOff: 'خاموش',
       probeCache: 'فقط کش',
       probeAuto: 'خودکار',
-      invertedNeumorphic: 'افکت نوماورفیک معکوس',
-      invertedNeumorphicD: 'پایه صاف، پرآمده در هاور/لمس. برای استفاده از نوماورفیک کلاسیک خاموش کنید.',
+      invertedNeumorphic: 'افکت نومورفیک معکوس',
+      invertedNeumorphicD: 'پایه صاف، پرآمده در هاور/لمس. برای استفاده از نومورفیک کلاسیک خاموش کنید.',
 
       // v3.4.1 additions - missing Persian translations for Overview tab
       emergency: 'قفل اضطراری',
@@ -1160,6 +1173,29 @@
         inset -4px -4px 8px var(--shv-shadow-light) !important;
       transform: translateY(0) !important;
     }
+
+    /* v3.5.5: classic raised neumorphic look when "Inverted neumorphic" is off */
+    .shv-media-placeholder:not(.shv-inverted-neumorphic) {
+      box-shadow:
+        6px 6px 12px var(--shv-shadow-dark),
+        -6px -6px 12px var(--shv-shadow-light) !important;
+      border-color: transparent !important;
+    }
+
+    .shv-media-placeholder:not(.shv-inverted-neumorphic):hover {
+      box-shadow:
+        8px 8px 16px var(--shv-shadow-dark),
+        -8px -8px 16px var(--shv-shadow-light) !important;
+      transform: translateY(-1px) !important;
+      border-color: var(--shv-accent) !important;
+    }
+
+    .shv-media-placeholder:not(.shv-inverted-neumorphic):active {
+      box-shadow:
+        inset 4px 4px 8px var(--shv-shadow-dark),
+        inset -4px -4px 8px var(--shv-shadow-light) !important;
+      transform: translateY(0) !important;
+    }
     `;
   }
 
@@ -1180,7 +1216,7 @@
       document.documentElement.appendChild(style);
     }
     const rules = settings.customAdHosts.map(h => 'html.shv-cosmetic-ads iframe[src*="' + h + '"]').join(',');
-    style.textContent = ':root{--shv-accent:' + settings.accent + '}' + (rules ? rules + '{display:none!important}' : '');
+    style.textContent = ':root{--shv-accent:' + effectiveAccent() + '}' + (rules ? rules + '{display:none!important}' : '');
   }
 
   /* ======================================================================
@@ -1434,8 +1470,9 @@
 
     if (!entry.audio) {
       const ratio = Number.isFinite(entry.aspectRatio) ? entry.aspectRatio : ASPECT_RATIO_DEFAULT;
-      button.style.aspectRatio = String(ratio);
-      button.style.minHeight = Math.max(PLACEHOLDER_MIN_HEIGHT, Math.min(PLACEHOLDER_MAX_HEIGHT, entry.height || PLACEHOLDER_MIN_HEIGHT)) + 'px';
+      // v3.5.5: must be !important - the stylesheet rules above are !important too and would beat a plain inline value.
+      button.style.setProperty('aspect-ratio', String(ratio), 'important');
+      button.style.setProperty('min-height', Math.max(PLACEHOLDER_MIN_HEIGHT, Math.min(PLACEHOLDER_MAX_HEIGHT, entry.height || PLACEHOLDER_MIN_HEIGHT)) + 'px', 'important');
     }
 
     // Video index badge (top-left) - v3.4.0
@@ -1549,7 +1586,8 @@
       const width = Number(video.getAttribute('width'));
       const height = Number(video.getAttribute('height'));
       if (width > 0 && height > 0) ratio = width / height;
-      else if (rect.width > 0 && rect.height > 0) ratio = rect.width / rect.height;
+      // v3.5.5: an un-loaded <video> is 300x150 by default: that is not a real ratio, so it is ignored.
+      else if (rect.width > 0 && rect.height > 0 && !(Math.round(rect.width) === 300 && Math.round(rect.height) === 150)) ratio = rect.width / rect.height;
     }
 
     if (!Number.isFinite(ratio) || ratio < ASPECT_RATIO_MIN || ratio > ASPECT_RATIO_MAX) ratio = ASPECT_RATIO_DEFAULT;
@@ -1869,11 +1907,11 @@
     }
     if (!res.ok) {
       try { if (res.body) { const p = res.body.cancel(); if (p && p.catch) p.catch(() => {}); } } catch (_) {}
-      if (res.status === 416) return { bytes: new Uint8Array(0), total, partial: false };
+      if (res.status === 416) return { bytes: new Uint8Array(0), total, partial: false, type: '' };
       throw new Error('HTTP ' + res.status);
     }
     const bytes = await readCapped(res, length);
-    return { bytes, total, partial: res.status === 206 };
+    return { bytes, total, partial: res.status === 206, type: (res.headers.get('content-type') || '').toLowerCase() };
   }
 
   /** Size + duration of one video URL with at most two small Range requests. */
@@ -1886,6 +1924,8 @@
       const first = await probeRange(url, 0, PROBE_HEAD_BYTES, ctl.signal);
       const result = { size: first.total || 0, duration: 0 };
       const kind = sniffContainer(first.bytes);
+      // v3.5.5: a playlist (.m3u8 / .mpd) or an error page is not a video file: its length is not a video size.
+      if (kind === '' && !/^video\//.test(first.type || '')) result.size = 0;
 
       if (kind === 'mp4') {
         const a = scanMp4(first.bytes, 0);
@@ -1931,7 +1971,7 @@
         if (cached.probed) entry.probed = true;
         if (cached.aspectRatio) {
           entry.aspectRatio = cached.aspectRatio;
-          if (entry.placeholder) entry.placeholder.style.aspectRatio = String(entry.aspectRatio);
+          if (entry.placeholder) entry.placeholder.style.setProperty('aspect-ratio', String(entry.aspectRatio), 'important');
         }
         updatePlaceholderInfo(entry);
       }
@@ -2000,12 +2040,12 @@
       state.probeCount++;
       probeVideo(url).then(result => {
         probeSession.set(key, result);
-        applyProbeResult(entry, result);
+        try { applyProbeResult(entry, result); } catch (_) {}
       }, err => {
         if (err && err.name === 'AbortError') { if (entry.probeState === 'running') entry.probeState = ''; return; }
         entry.probeState = 'failed';                                   // CORS / network / HTTP error: not retried this page
         probeSession.set(key, null);
-      }).then(() => { state.probeActive--; probePump(); });
+      }).finally(() => { state.probeActive--; probePump(); });
     }
   }
 
@@ -2213,6 +2253,23 @@
   }
 
   /**
+   * v3.5.5: Seek to `time` as soon as the metadata is there. When the metadata already arrived
+   * (cached video) no event will fire any more, so readyState is checked first.
+   */
+  function seekWhenReady(video, time, skipIfMoved) {
+    const seek = () => {
+      try {
+        if (skipIfMoved && video.currentTime > 1) return;   // the user already seeked / started: do not jump
+        if (Number.isFinite(video.duration) && video.duration > 0) {
+          video.currentTime = Math.min(time, Math.max(0, video.duration - 0.5));
+        }
+      } catch (_) {}
+    };
+    if (video.readyState >= 1) seek();
+    else video.addEventListener('loadedmetadata', seek, { once: true });
+  }
+
+  /**
    * Activate a deferred video: remove placeholder, restore sources, optionally play.
    * Handles resume position from IndexedDB and emergency mode checks.
    * @param {Object} entry - Video entry from videoStates WeakMap
@@ -2241,31 +2298,15 @@
     restoreVideoSources(entry);
     if (playNow) fetchVideoSize(entry); // only for the video the user just opened
 
-    // v3.3.0: Load resume position from IndexedDB
-    let resumeTime = entry.resumeTime;
+    // v3.3.0 / v3.5.5: resume position (IndexedDB for a fresh open, memory for a released video).
+    // Both paths honour the "Resume position" setting.
+    const resumeTime = entry.resumeTime;
     if (settings.resumePosition && resumeTime <= 0) {
       idbGetResumePosition(entry.videoSrc || video.currentSrc, location.href).then(saved => {
-        if (saved && Number.isFinite(saved.currentTime) && saved.currentTime > 0) {
-          resumeTime = saved.currentTime;
-          // Apply after metadata loads
-          video.addEventListener('loadedmetadata', () => {
-            try {
-              if (Number.isFinite(video.duration)) {
-                video.currentTime = Math.min(resumeTime, Math.max(0, video.duration - 0.5));
-              }
-            } catch (_) {}
-          }, { once: true });
-        }
+        if (saved && Number.isFinite(saved.currentTime) && saved.currentTime > 0) seekWhenReady(video, saved.currentTime, true);
       });
-    } else if (resumeTime > 0) {
-      const restorePosition = () => {
-        try {
-          if (Number.isFinite(video.duration)) {
-            video.currentTime = Math.min(resumeTime, Math.max(0, video.duration - 0.5));
-          }
-        } catch (_) {}
-      };
-      video.addEventListener('loadedmetadata', restorePosition, { once: true });
+    } else if (settings.resumePosition && resumeTime > 0) {
+      seekWhenReady(video, resumeTime, false);
     }
 
     // v3.5.1: Layer 3 - Video element fallback for duration when user activates
@@ -3011,12 +3052,23 @@
       const t = video.currentTime, d = video.duration;
       if (Number.isFinite(t) && t > 3 && (!Number.isFinite(d) || d - t > 3)) {
         idbSaveResumePosition(entry.videoSrc, location.href, t, d);
+      } else if (Number.isFinite(t) && Number.isFinite(d) && d > 0 && d - t <= 3) {
+        idbDeleteResumePosition(entry.videoSrc);   // v3.5.5: watched to the end: next time starts over
       }
     } catch (_) {}
   }
   window.addEventListener('pagehide', () => {
     for (const entry of state.mediaEntries) if (entry.kind === 'video' && entry.loaded) saveResumeNow(entry);
   });
+
+  document.addEventListener('ended', event => {
+    const media = event.target;
+    const entry = media instanceof HTMLMediaElement ? videoStates.get(media) : null;
+    if (entry && entry.loaded) {
+      entry.resumeTime = 0;
+      if (entry.videoSrc) idbDeleteResumePosition(entry.videoSrc);
+    }
+  }, true);
 
   document.addEventListener('play', event => {
     const video = event.target;
@@ -3057,7 +3109,10 @@
 
   document.addEventListener('visibilitychange', () => {
     if (!settings.enabled || !settings.pauseHidden || !document.hidden) return;
-    document.querySelectorAll('video, audio').forEach(media => { if (!media.paused) safePause(media); });
+    document.querySelectorAll('video, audio').forEach(media => {
+      if (media === document.pictureInPictureElement) return;   // v3.5.5: Picture-in-Picture keeps playing
+      if (!media.paused) safePause(media);
+    });
   });
 
 
@@ -3191,7 +3246,7 @@
     if (typeof nativeFetch === 'function') {
       window.fetch = function (input) {
         let url = '';
-        try { url = typeof input === 'string' ? input : (input && input.url) || ''; } catch (_) {}
+        try { url = typeof input === 'string' ? input : (input && (input.url || input.href)) || ''; } catch (_) {}
         if (url && requestBlocked(url)) {
           state.blockedRequests++;
           scheduleUIUpdate();
@@ -3287,7 +3342,7 @@
       cursor: pointer; color: var(--on); font-size: 20px; background: var(--ac);
       box-shadow: 0 8px 24px rgba(0,0,0,.4), 0 0 0 3px rgba(255,255,255,.12);
       display: grid; place-items: center; gap: 6px; touch-action: none; opacity: var(--idle, .9);
-      transition: opacity .2s, transform .2s; bottom: 16px; transform: translateY(0);
+      transition: opacity .2s, transform .2s; bottom: calc(16px + (1 - var(--fab-y, 1)) * (100% - 86px)); transform: translateY(0);
     }
     .fab.l { left: 16px; } .fab.r { right: 16px; }
     .fab:active { transform: scale(.93); }
@@ -3420,12 +3475,18 @@
     return (r * 299 + g * 587 + b * 114) / 1000 > 140 ? '#0a1a18' : '#ffffff';
   }
 
+  /** v3.5.5: the accent that is really in force (a preset wins over the saved accent, "custom" uses it). */
+  function effectiveAccent() {
+    const preset = THEME_PRESETS[settings.themePreset];
+    return (preset && preset.accent && settings.themePreset !== 'custom') ? preset.accent : settings.accent;
+  }
+
   function applyPageTheme() {
     const root = document.documentElement;
     if (!root) return;
     const theme = resolvedTheme();
     const isLight = theme === 'light';
-    const accent = settings.accent;
+    const accent = effectiveAccent();
 
     if (isLight) {
       root.style.setProperty('--shv-bg', '#f0f2f5');
@@ -3452,6 +3513,18 @@
       root.style.setProperty('--shv-shadow-dark', '#14141e');
       root.style.setProperty('--shv-shadow-light', '#2c2c44');
     }
+    // v3.5.5: presets also tint the placeholder surface (the default / custom presets keep the stock colors)
+    const preset = THEME_PRESETS[settings.themePreset];
+    const presetBg = preset && settings.themePreset !== 'default' && settings.themePreset !== 'custom'
+      ? (isLight ? preset.lightBg : preset.darkBg) : null;
+    if (presetBg) {
+      const mix = (pct, other) => 'color-mix(in srgb, ' + presetBg + ' ' + pct + '%, ' + other + ')';
+      root.style.setProperty('--shv-bg', presetBg);
+      root.style.setProperty('--shv-surface', mix(isLight ? 65 : 88, '#fff'));
+      root.style.setProperty('--shv-border', mix(isLight ? 80 : 72, isLight ? '#000' : '#fff'));
+      root.style.setProperty('--shv-shadow-dark', mix(isLight ? 78 : 55, '#000'));
+      root.style.setProperty('--shv-shadow-light', mix(isLight ? 50 : 82, '#fff'));
+    }
     root.style.setProperty('--shv-accent', accent);
   }
 
@@ -3460,19 +3533,29 @@
     if (!ui) return;
     ui.root.setAttribute('data-theme', resolvedTheme());
     ui.root.setAttribute('data-s', settings.scale);
-    ui.root.style.setProperty('--ac', settings.accent);
-    ui.root.style.setProperty('--on', accentText(settings.accent));
+    ui.root.style.setProperty('--ac', effectiveAccent());
+    ui.root.style.setProperty('--on', accentText(effectiveAccent()));
     ui.root.style.setProperty('--idle', String(settings.idle));
-    ui.root.style.setProperty('--y', String(settings.y));
     ui.root.classList.toggle('compact', settings.compact);
     ui.root.classList.toggle('calm', settings.calmMenu);
-    ui.fab.className = 'fab ' + (settings.side === 'left' ? 'l' : 'r') + (state.open ? ' open' : '') + (settings.enabled ? '' : ' off');
+    applyFabPosition();
     const dir = settings.lang === 'fa' ? 'rtl' : 'ltr';
     ui.sheet.setAttribute('dir', dir);
     ui.toast.setAttribute('dir', dir);
     ui.fab.setAttribute('aria-label', t('open'));
     ui.close.setAttribute('aria-label', t('close'));
     applyPageTheme();
+  }
+
+  /**
+   * v3.5.5: side + vertical position of the floating button. fabY 1 = bottom corner (16px from the edge),
+   * 0 = top corner (16px from the top). Light enough to run on every pointermove while dragging.
+   */
+  function applyFabPosition() {
+    const ui = state.ui;
+    if (!ui) return;
+    ui.root.style.setProperty('--fab-y', String(settings.fabY));
+    ui.fab.className = 'fab ' + (settings.side === 'left' ? 'l' : 'r') + (state.open ? ' open' : '') + (settings.enabled ? '' : ' off');
   }
 
   /* ---- builders ---- */
@@ -3653,13 +3736,14 @@
 
     const dots = h('div', { class: 'dots' });
     for (const color of ACCENTS) {
-      const dot = h('button', { class: 'dot', type: 'button', 'aria-pressed': String(settings.accent === color), 'aria-label': color,
-        onclick: () => { setOpt('accent', color); setOpt('themePreset', 'custom'); applyThemePreset(); } });
+      const dot = h('button', { class: 'dot', type: 'button', 'aria-pressed': String(effectiveAccent() === color), 'aria-label': color,
+        onclick: () => { settings.themePreset = 'custom'; setOpt('accent', color); } });
       dot.style.background = color;
       dots.append(dot);
     }
     const range = h('input', { type: 'range', min: '0.3', max: '1', step: '0.05', value: String(settings.idle),
-      oninput: event => { settings.idle = Number(event.target.value); saveSettings(); applyUITheme(); } });
+      oninput: event => { settings.idle = Number(event.target.value); applyUITheme(); },
+      onchange: () => saveSettings() });
 
     f.append(section(t('secLook'), h('div', { class: 'pad' },
       segment(t('theme'), settings.theme, [['system', t('tSys')], ['dark', t('tDark')], ['light', t('tLight')]], v => setOpt('theme', v)),
@@ -3673,7 +3757,7 @@
     for (const [key, preset] of Object.entries(THEME_PRESETS)) {
       if (key === 'custom') continue; // Custom preset has no color, shown via accent dots
       const dot = h('button', { class: 'dot', type: 'button', 'aria-pressed': String(settings.themePreset === key), 'aria-label': preset.name,
-        onclick: () => { setOpt('themePreset', key); applyThemePreset(); } });
+        onclick: () => setOpt('themePreset', key) });
       dot.style.background = preset.accent;
       dot.title = preset.name;
       presetDots.append(dot);
@@ -3846,9 +3930,10 @@
       if (!drag) return;
       if (Math.abs(event.clientY - drag.y) + Math.abs(event.clientX - drag.x) > 8) drag.moved = true;
       if (drag.moved) {
-        settings.y = Math.min(0.94, Math.max(0.06, event.clientY / window.innerHeight));
+        // pointer = centre of the button: 43px = 16px margin + half of the 54px button + ... mapped onto fabY 0..1
+        settings.fabY = Math.min(1, Math.max(0, (event.clientY - 43) / Math.max(1, window.innerHeight - 86)));
         settings.side = event.clientX < window.innerWidth / 2 ? 'left' : 'right';
-        applyUITheme();
+        applyFabPosition();
       }
     });
     fab.addEventListener('pointerup', () => {
@@ -3938,23 +4023,8 @@
   }
 
   function applyThemePreset() {
-    const preset = THEME_PRESETS[settings.themePreset] || THEME_PRESETS.default;
-    if (!preset) return;
-
-    const root = document.documentElement;
-
-    // For 'custom' preset, use current accent; otherwise use preset accent
-    const accentColor = (settings.themePreset === 'custom' || preset.accent === null)
-      ? settings.accent
-      : preset.accent;
-
-    root.style.setProperty('--shv-accent', accentColor);
-
-    // Update panel accent
-    if (state.ui) {
-      state.ui.root.style.setProperty('--ac', accentColor);
-      state.ui.root.style.setProperty('--on', accentText(accentColor));
-    }
+    applyPageTheme();
+    applyUITheme();
   }
 
   if (window.__SHV_TEST__) {

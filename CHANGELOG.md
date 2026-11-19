@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this format.
 
+## [3.5.5] - 2026-11-19
+
+### Fixed
+- **Aspect-ratio & min-height not applied** — inline styles now use `setProperty(..., 'important')` in `makePlaceholder` and when reading ratio from cache, overriding the stylesheet `!important` rules. Unloaded `<video>` (300×150) is ignored for aspect-ratio calculation to prevent 2:1 cards.
+- **FAB vertical drag (`y` → `fabY`)** — old `y` setting was set but never used in CSS. Replaced with `fabY` (0=top, 1=bottom, default 1). Position calculated as `bottom: calc(16px + (1 - var(--fab-y, 1)) * (100% - 86px))`. Drag updates only position/side via `applyFabPosition()`, no full theme re-apply on every `pointermove`. Migration: old `y` ignored, button returns to bottom once.
+- **Theme preset persistence** — `applyThemePreset` set accent but `applyUITheme`/`applyPageTheme`/`updateDynamicStyle` rewrote it on every `applyAll`. New `effectiveAccent()` returns the real color; non-default/custom presets now color card surfaces too (via `color-mix`). Color dots and preset clicks use single `setOpt`. `aria-pressed` on color dots from `effectiveAccent()`.
+- **Inverted neumorphic option** — base style was inverted; classic raised neumorphic was missing. Added `:not(.shv-inverted-neumorphic)` rules for classic look (raised base, more raised on hover, pressed on touch).
+- **Probe size for non-video files** — `.m3u8`/`.mpd` or error pages with HTTP 200 showed response length as "video size". `probeRange` now returns `content-type`; unknown container + not `video/*` → size 0, not displayed.
+- **`probeActive` counter leak** — chain `.then(ok, err).then(() => probeActive--)` could skip decrement if first handler threw. Moved `applyProbeResult` into `try/catch` with decrement in `.finally`.
+- **Resume race condition** — if browser cache caused `loadedmetadata` before IndexedDB read, resume was silently ignored. New `seekWhenReady` checks `readyState >= 1` first for immediate seek; otherwise waits for `loadedmetadata`. If user already sought (`currentTime > 1`), no jump.
+
+### Changed
+- **Settings migration**: `y` key removed, `fabY` added (0-1, default 1). `IDB_VERSION` unchanged (still 2). Storage key `shvUltraLite.settings.v3` unchanged.
+- **Minor improvements**:
+  - Resume record deleted after watched to end (<3s from end or `ended` event). New `idbDeleteResumePosition`.
+  - Resume setting respected: when off, in-memory resume after release also skipped.
+  - `fetch` with URL object — `.href` now read alongside `.url` to avoid ad blocker rejection.
+  - Picture-in-Picture exception — `pauseHidden` doesn't pause `document.pictureInPictureElement` (Firefox PiP uses different API, no effect there).
+  - Opacity slider saves only on `change` (release), not every `input`.
+  - Constant `MAX_CUSTOM_AD_HOSTS` used in `sanitize` (was `MAX_ID_LENGTH`; both 200, behavior unchanged).
+  - Persian typo: "نوماورفیک" → "نومورفیک".
+  - Removed "performance profiles" from description (not in UI).
+- **Bundle size**: ~118KB (same as v3.5.4)
+
+### Tests
+- `node --check`: syntax OK.
+- jsdom smoke test (28 checks): `fabY` default/migration, left/right FAB classes, drag+clamp, position save, preset color persistence, `!important` aspect-ratio, classic CSS class present, no orientation lock remnants.
+- **Not done**: real Firefox (Android + Windows) test — layout, touch behavior, resume/probe on real video require manual device test.
+
 ## [3.4.6] - 2026-11-04
 
 ### Added

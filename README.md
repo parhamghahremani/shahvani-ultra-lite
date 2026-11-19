@@ -4,7 +4,7 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 
 **Author:** parham  
 **Homepage:** https://github.com/parhamghahremani  
-**Version:** 3.5.4
+**Version:** 3.5.5
 
 ## Features
 
@@ -50,7 +50,7 @@ Settings persist in `localStorage` (`shvUltraLite.settings.v3`) and IndexedDB (`
   showVideoInfo: true,           // show size/duration badges
   videoProbe: 'off',             // 'off' | 'cache' | 'auto'
   side: 'right',                 // FAB side: 'left' | 'right'
-  fabY: null,                    // FAB vertical position (auto if null)
+  fabY: 1,                       // FAB vertical position: 0=top...1=bottom (default: bottom)
   lang: 'fa',                    // 'en' | 'fa'
   batchSize: 10,                 // load visible players batch
   showPoster: true,              // show poster in placeholder
@@ -136,6 +136,7 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| **3.5.5** | 2026-11-19 | 7 bug fixes: aspect-ratio/min-height with !important, FAB vertical drag (fabY), theme preset persistence, inverted neumorphic option fixed, probe size for non-video files, probeActive counter leak, resume race condition; minor fixes: resume cleanup on finish, resume setting respect, fetch URL object fix, PiP exception, opacity slider debounce, MAX_CUSTOM_AD_HOSTS constant, Persian typo fix |
 | **3.5.4** | 2026-11-18 | Optional probe (off/cache/auto), IntersectionObserver, MP4/EBML parsing, stream cancellation |
 | **3.5.3** | 2026-11-18 | Zero-download guarantee, deterministic keys, browser guards, IndexedDB v2 resume |
 | **3.5.2** | 2026-11-17 | preloadFirstNForDuration (removed in v3.5.3) |

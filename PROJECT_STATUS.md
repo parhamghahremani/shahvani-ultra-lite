@@ -1,8 +1,8 @@
 # Project Status — Shahvani Ultra Lite
 
-**Last Updated**: 2026-11-18  
-**Current Version**: 3.5.4  
-**Git Commit**: 2f4ad19 (v3.5.4) — working tree clean  
+**Last Updated**: 2026-11-19  
+**Current Version**: 3.5.5  
+**Git Commit**: 2f4ad19 (v3.5.4) — working tree clean (pending v3.5.5 commit)  
 **GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Private ✅, pushed 2026-11-18T10:17:20Z)
 
 ---
@@ -11,7 +11,8 @@
 
 | Version | Date | Status | Key Features |
 |---------|------|--------|--------------|
-| 3.5.4 | 2026-11-18 | **Current** | Optional probe (off/cache/auto), IntersectionObserver, MP4/EBML parsing |
+| 3.5.5 | 2026-11-19 | **Current** | 7 bug fixes (aspect-ratio, FAB drag, preset persistence, inverted neumorphic, probe non-video, probeActive leak, resume race), minor improvements |
+| 3.5.4 | 2026-11-18 | Archived | Optional probe (off/cache/auto), IntersectionObserver, MP4/EBML parsing |
 | 3.5.3 | 2026-11-18 | Archived | Zero-download guarantee, deterministic keys, browser guards |
 | 3.5.2 | 2026-11-17 | Archived | preloadFirstNForDuration (removed in v3.5.3) |
 | 3.5.1 | 2026-11-17 | Archived | IndexedDB videoMetadata cache, 4-layer detection, hashKey |
@@ -35,7 +36,7 @@
 ## File Inventory
 
 ### Source
-- `src/shahvani-ultra-lite.user.js` — **v3.5.4** (173,549 bytes)
+- `src/shahvani-ultra-lite.user.js` — **v3.5.5** (177,031 bytes)
 
 ### Version Archives (`versions/`)
 | File | Size | Date |
@@ -51,13 +52,14 @@
 | v3.5.2.user.js | 150,007 | 2026-11-17 |
 | v3.5.3.user.js | 153,302 | 2026-11-18 |
 | v3.5.4.user.js | 173,549 | 2026-11-18 |
+| v3.5.5.user.js | 177,031 | 2026-11-19 |
 
 ### Backups (`backups/`)
 | Type | Files | Verified |
 |------|-------|----------|
-| Releases (ZIP) | v3.5.0–v3.5.4 | ✅ SHA256 recorded |
-| Git Bundles | v3.5.1–v3.5.4 | ✅ `git bundle verify` OK |
-| Pre-Change | v3.5.0–v3.5.3 | ✅ |
+| Releases (ZIP) | v3.5.0–v3.5.5 | ✅ SHA256 recorded |
+| Git Bundles | v3.5.1–v3.5.5 | ✅ `git bundle verify` OK |
+| Pre-Change | v3.5.0–v3.5.4 | ✅ |
 | Manifest | BACKUP_MANIFEST.md | ✅ Complete |
 
 ### Documentation (`docs/`)
@@ -79,8 +81,8 @@
 |------|--------|
 | CLAUDE.md | ✅ Created |
 | .gitignore | ✅ Created |
-| package.json | ⚠️ Needs version bump to 3.5.4 |
-| README.md | ⚠️ Needs update to v3.5.4 |
+| package.json | ✅ v3.5.5 |
+| README.md | ✅ v3.5.5 |
 | playwright.config.js | ✅ Exists |
 | .claude/launch.json | ✅ Exists |
 
@@ -147,5 +149,6 @@ Untracked files:
 
 ## Next Steps
 
-1. Consider v3.5.5 for any bug fixes from user feedback
-2. Monitor shahvani.com for structural changes affecting detection
+1. Commit and tag v3.5.5
+2. Push to GitHub private repo
+3. Monitor shahvani.com for structural changes affecting detection
