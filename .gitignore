@@ -44,7 +44,6 @@ test-results/
 coverage/
 
 # Build artifacts (if any)
-dist/
 build/
 
 # Local config
