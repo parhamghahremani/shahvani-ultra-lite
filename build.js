@@ -41,11 +41,11 @@ function build() {
     let distContent = content
         .replace(
             /@downloadURL\s+.*/,
-            `@downloadURL  https://github.com/parhamghahremani/shahvani-ultra-lite/raw/main/dist/${DIST_FILE}`
+            `@downloadURL  https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/${DIST_FILE}`
         )
         .replace(
             /@updateURL\s+.*/,
-            `@updateURL    https://github.com/parhamghahremani/shahvani-ultra-lite/raw/main/dist/${DIST_FILE}`
+            `@updateURL    https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/${DIST_FILE}`
         );
 
     fs.writeFileSync(distFile, distContent);
