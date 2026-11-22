@@ -1,7 +1,7 @@
 # Project Instructions — Shahvani Ultra Lite
 
 **Project Root**: `D:\Desktop\project\scripts\shahvani-ultra-lite`  
-**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Private)  
+**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public)  
 **Current Version**: 3.5.4  
 **Primary Language**: Persian (communication) / English (code, docs, metadata)
 

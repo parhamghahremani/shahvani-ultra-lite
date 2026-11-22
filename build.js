@@ -31,31 +31,29 @@ function build() {
 
     const content = fs.readFileSync(SRC_FILE, "utf-8");
 
-    // Create versioned release
+    // Create versioned release (archive - no URL updates)
     const versionedFile = path.join(VERSIONS_DIR, `v${version}.user.js`);
     fs.writeFileSync(versionedFile, content);
-    console.log(`Created versioned release: ${versionedFile}`);
+    console.log(`Created versioned archive: ${versionedFile}`);
 
-    // Create dist file (latest) with stable update URLs pointing to dist/
+    // Create dist file (latest) with @downloadURL/@updateURL pointing to stable dist/ file
     const distFile = path.join(DIST_DIR, DIST_FILE);
-    let distContent = content
-        .replace(
-            /@downloadURL\s+.*/,
-            `@downloadURL  https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/${DIST_FILE}`
-        )
-        .replace(
-            /@updateURL\s+.*/,
-            `@updateURL    https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/${DIST_FILE}`
-        );
+    const stableUrl = `https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/${DIST_FILE}`;
+
+    // Insert @downloadURL/@updateURL after @grant line
+    let distContent = content.replace(
+        /(@grant\s+none)/,
+        `$1\n// @downloadURL  ${stableUrl}\n// @updateURL    ${stableUrl}`
+    );
 
     fs.writeFileSync(distFile, distContent);
-    console.log(`Created dist file: ${distFile}`);
-    console.log(`Updated dist file with stable URLs`);
+    console.log(`Created dist file with stable URLs: ${distFile}`);
+    console.log(`  URLs: ${stableUrl}`);
 
     console.log(`\nBuild complete! Version: ${version}`);
     console.log(`Files:`);
-    console.log(`  - ${versionedFile}`);
-    console.log(`  - ${distFile}`);
+    console.log(`  - ${versionedFile} (archive)`);
+    console.log(`  - ${distFile} (stable update target)`);
 }
 
 build();
