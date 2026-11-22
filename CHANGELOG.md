@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this format.
 
+## [3.6.0] - 2026-11-22
+
+### Added
+- **Download tab** (new, between Video and Frames). Lists every video of the page in DOM order with the same
+  numbers as the lock cards, a thumbnail when one is available, duration/size when known, and a checkbox.
+  - **Download Selected**: sends the selected videos to Firefox's own download manager (plain `<a download>`
+    clicks, 500 ms apart; more than 10 needs a second tap). The selection is not cleared afterwards.
+  - **Copy Selected Links**: one link per line, ready for external download managers. Reports how many links
+    were copied and how many videos had none. Falls back to `execCommand`, then to a manual-copy box.
+  - **Per-video actions**: Download and Copy icons (with tooltips) on every row.
+  - **Select all / Deselect all**; counter and tab label (`Download (3)`) update in place.
+  - Works while the script is **Off** (the list is read from the DOM, nothing depends on the lock engine).
+  - Nothing is requested to build the list: thumbnails are drawn from a poster the page already loaded or from a
+    frame the opened video already decoded; locked videos are never opened to read their links.
+  - The selection survives DOM changes and reloads of the tab (`sessionStorage`, up to 300 items).
+- **Unlock & Load All Videos** (Overview > Quick Actions, under Release): activates every locked video one after
+  the other and starts buffering (`preload=auto`). Not a download to disk. Needs a second tap, with a stronger
+  warning above 20 videos. Release is unchanged.
+
+### Changed
+- **Theme Color** replaces *Accent Color* and *Preset* (one control, 8 swatches: accent + optional surface tint).
+- The old "Theme" (System / Dark / Light) row is now called **Mode**.
+- `confirmButton` accepts a dynamic label and can run at once when nothing needs confirming.
+- `copyText` has an `execCommand` fallback.
+
+### Removed
+- Accent Color and Preset settings (`accent`, `themePreset`), `ACCENTS`, `THEME_PRESETS`, `applyThemePreset()`.
+
+### Migration
+- Settings saved by 3.5.x are converted on load: a non-custom preset maps to the same-named Theme Color;
+  a custom accent maps to the nearest swatch. Everything else is kept. Import of old exports is migrated too.
+- A custom accent that equals a preset colour now also gets that preset's surface tint.
+
+### Known limitations
+- Direct download works only for links on the page's own origin (`shahvani.com` page -> `shahvani.com` video).
+  Another origin (e.g. `www.` vs apex) disables the Download icon; Copy still works.
+- Playlist (`.m3u8` / `.mpd`) and blob / MediaSource videos have no direct file and are marked accordingly.
+- Links keep their query token; a time-limited token may expire before a late download.
+- Thumbnails exist only for videos whose poster has loaded (or that were opened); others show a placeholder.
+
 ## [3.5.5] - 2026-11-19
 
 ### Fixed

@@ -4,7 +4,7 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 
 **Author:** parham  
 **Homepage:** https://github.com/parhamghahremani  
-**Version:** 3.5.5
+**Version:** 3.6.0
 
 ## Features
 
@@ -15,8 +15,10 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 | **4-layer metadata detection** | IndexedDB cache → Page metadata → Range probe → Video element `loadedmetadata` |
 | **Optional size/duration probe** | `off` (default, zero network) / `cache` (local only) / `auto` (IntersectionObserver + capped Range) |
 | **Performance profiles** | Compatible / Balanced / Ultra — escalating optimizations |
-| **Tabbed control panel** | Overview, Media, Look, Data, Network, Privacy, Settings |
-| **Theme system** | System / Dark / Light with CSS variables, instant switch |
+| **Tabbed control panel** | Overview, Video, Frames, Ads, Page, Look, Data, Download (8 tabs) |
+| **Theme Color system** | 8 presets (Teal, Midnight, Forest, Sunset, Monochrome, Ocean, Coral, Rose) — accent + optional surface tint |
+| **Download tab** | Select videos, copy links, native Firefox download (plain `<a download>`), selection persists |
+| **Unlock & Load All** | One-tap activate all locked videos with `preload=auto` (buffer, not download to disk) |
 | **Ad host filtering** | Known ad domains (doubleclick, googlesyndication, taboola, etc.) |
 | **Video resume** | Position saved to IndexedDB on pause/pagehide, restored on next visit |
 | **Manual resource release** | One-click release of paused videos + off-screen iframes |
@@ -46,16 +48,13 @@ Settings persist in `localStorage` (`shvUltraLite.settings.v3`) and IndexedDB (`
   profile: 'balanced',           // 'compatible' | 'balanced' | 'ultra'
   hideKnownAds: true,            // filter known ad iframes
   theme: 'system',               // 'system' | 'dark' | 'light'
+  themeColor: 'default',         // 'default' | 'midnight' | 'forest' | 'sunset' | 'monochrome' | 'ocean' | 'coral' | 'rose'
   compact: false,                // compact panel mode
   showVideoInfo: true,           // show size/duration badges
   videoProbe: 'off',             // 'off' | 'cache' | 'auto'
   side: 'right',                 // FAB side: 'left' | 'right'
   fabY: 1,                       // FAB vertical position: 0=top...1=bottom (default: bottom)
   lang: 'fa',                    // 'en' | 'fa'
-  batchSize: 10,                 // load visible players batch
-  showPoster: true,              // show poster in placeholder
-  accent: 'blue',                // UI accent color
-  preset: 'default',             // UI preset
   lazyImages: true,              // lazy-load off-screen images
   showPlaceholders: true,        // show placeholders instead of hiding
   blockScripts: true             // block ad scripts via beforescriptexecute (FF)
@@ -72,13 +71,14 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 | **Balanced** | Animation/transition duration → 0.001ms | Lazy + fetchpriority=low (off-screen) | No |
 | **Ultra** | Same as Balanced | Same | `content-visibility: auto` on repeated cards |
 
-## Panel Controls (7 Tabs)
+## Panel Controls (8 Tabs)
 
 ### Overview Tab
 - **Profile buttons** — switch performance profile
 - **Status grid** — pending/active videos & iframes
 - **Detail stats** — network resources, long tasks, cleaned entries, filtered ads
 - **Emergency mode** — red button, pauses all videos, blocks tap-to-load
+- **Unlock & Load All** — activate all locked videos with `preload=auto` (buffering, not disk download), second tap required, stronger warning above 20 videos
 
 ### Media Tab
 - **Ad filter toggle** — known ad host filtering
@@ -88,13 +88,13 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 - **Release inactive** — detach sources from paused videos + off-screen iframes
 
 ### Look Tab
-- **Theme** — System / Dark / Light
+- **Mode** — System / Dark / Light
+- **Theme Color** — 8 presets: Teal, Midnight, Forest, Sunset, Monochrome, Ocean, Coral, Rose (accent + optional surface tint)
 - **Compact mode** — smaller panel, hides descriptions
 - **Video info badges** — toggle size/duration display
 - **Video probe mode** — Off / Cache only / Auto (when showVideoInfo on)
 - **FAB side** — Left / Right
 - **Language** — English / Persian
-- **Accent color** — Blue / Green / Amber / Red / Purple / Teal
 - **Show poster** — Toggle poster in placeholder
 
 ### Data Tab
@@ -102,6 +102,14 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 - **Video metadata cache** — view/clear cached size/duration
 - **Export/Import settings** — JSON backup/restore
 - **Clear all data** — nuclear option
+
+### Download Tab
+- **Video list** — all videos on page in DOM order with same numbers as lock cards
+- **Selection** — checkboxes, Select all / Deselect all, counter updates live
+- **Download Selected** — sends to Firefox download manager (500ms gap, >10 needs second tap)
+- **Copy Selected Links** — one per line, fallback to manual copy box
+- **Per-row actions** — Download / Copy icons with tooltips
+- **Works while script is Off** — reads from DOM, no lock engine needed
 
 ### Network Tab
 - **Blocked requests log** — recent blocked resource requests

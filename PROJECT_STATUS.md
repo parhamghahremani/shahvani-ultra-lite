@@ -1,9 +1,9 @@
 # Project Status — Shahvani Ultra Lite
 
-**Last Updated**: 2026-11-19  
-**Current Version**: 3.5.5  
-**Git Commit**: 2f4ad19 (v3.5.4) — working tree clean (pending v3.5.5 commit)  
-**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Private ✅, pushed 2026-11-18T10:17:20Z)
+**Last Updated**: 2026-11-22  
+**Current Version**: 3.6.0  
+**Git Commit**: (pending v3.6.0 commit)  
+**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, pushed 2026-11-18T10:17:20Z)
 
 ---
 
@@ -11,7 +11,8 @@
 
 | Version | Date | Status | Key Features |
 |---------|------|--------|--------------|
-| 3.5.5 | 2026-11-19 | **Current** | 7 bug fixes (aspect-ratio, FAB drag, preset persistence, inverted neumorphic, probe non-video, probeActive leak, resume race), minor improvements |
+| 3.6.0 | 2026-11-22 | **Current** | Download tab (select, copy links, native Firefox download), Unlock & Load All, Theme Color (8 presets replaces Accent+Preset), sessionStorage selection persistence, Migration from 3.5.x settings |
+| 3.5.5 | 2026-11-19 | Archived | 7 bug fixes (aspect-ratio, FAB drag, preset persistence, inverted neumorphic, probe non-video, probeActive leak, resume race), minor improvements |
 | 3.5.4 | 2026-11-18 | Archived | Optional probe (off/cache/auto), IntersectionObserver, MP4/EBML parsing |
 | 3.5.3 | 2026-11-18 | Archived | Zero-download guarantee, deterministic keys, browser guards |
 | 3.5.2 | 2026-11-17 | Archived | preloadFirstNForDuration (removed in v3.5.3) |
@@ -36,7 +37,7 @@
 ## File Inventory
 
 ### Source
-- `src/shahvani-ultra-lite.user.js` — **v3.5.5** (177,031 bytes)
+- `src/shahvani-ultra-lite.user.js` — **v3.6.0** (~180KB)
 
 ### Version Archives (`versions/`)
 | File | Size | Date |
@@ -53,6 +54,7 @@
 | v3.5.3.user.js | 153,302 | 2026-11-18 |
 | v3.5.4.user.js | 173,549 | 2026-11-18 |
 | v3.5.5.user.js | 177,031 | 2026-11-19 |
+| v3.6.0.user.js | ~180KB | 2026-11-22 |
 
 ### Backups (`backups/`)
 | Type | Files | Verified |
@@ -61,6 +63,7 @@
 | Git Bundles | v3.5.1–v3.5.5 | ✅ `git bundle verify` OK |
 | Pre-Change | v3.5.0–v3.5.4 | ✅ |
 | Manifest | BACKUP_MANIFEST.md | ✅ Complete |
+| v3.6.0 | pending | ⏳ pending creation |
 
 ### Documentation (`docs/`)
 | File | Status |
@@ -91,28 +94,24 @@
 ## Git Status
 
 ```bash
-On branch master
-Changes not staged for commit:
-  modified:   CHANGELOG.md
-  modified:   package.json
-  modified:   package-lock.json
-  modified:   src/shahvani-ultra-lite.user.js
+On branch main
+Your branch is up to date with 'origin/main'.
 
-Untracked files:
-  CLAUDE.md
-  .gitignore
-  PROJECT_STATUS.md
-  backups/BACKUP_MANIFEST.md
-  backups/git-bundles/
-  backups/pre-change/shahvani-ultra-lite.v3.5.3.user.js
-  backups/releases/v3.5.3.user.js.zip
-  backups/releases/v3.5.4.user.js.zip
-  docs/
-  versions/v3.5.3.user.js
-  versions/v3.5.4.user.js
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+
+	modified:   CHANGELOG.md
+	modified:   CLAUDE.md
+	modified:   package.json
+	modified:   PROJECT_STATUS.md
+	modified:   README.md
+	new file:   versions/v3.6.0.user.js
+	new file:   dist/shahvani-ultra-lite.user.js
 ```
 
-**Last commit**: `2f4ad19` — "v3.5.4: Optional size/duration probe with off/cache/auto modes, IntersectionObserver, MP4/EBML parsing"
+**Last commit**: `b1e2571` — "v3.5.5: 7 bug fixes (aspect-ratio, FAB drag, preset persistence, inverted neumorphic, probe non-video, probeActive leak, resume race), minor improvements"
+**Pending commit**: `v3.6.0: Theme Color, Download tab, Unlock & Load All`
 
 ---
 
@@ -120,9 +119,9 @@ Untracked files:
 
 | Test | Status | Notes |
 |------|--------|-------|
-| Syntax check (`node --check`) | ✅ Pass | v3.5.4 |
-| Git bundle verify | ✅ Pass | v3.5.1–v3.5.4 |
-| Manual test (Firefox + TM) | ✅ Pass | v3.5.3 zero-download verified |
+| Syntax check (`node --check`) | ✅ Pass | v3.6.0 |
+| Build (`node build.js`) | ✅ Pass | versions/ + dist/ created |
+| Manual test (Firefox + TM) | ⏳ Pending | v3.6.0 features to verify |
 | Probe auto mode | ✅ Pass | Range requests only, no video download |
 | Cache persistence | ✅ Pass | Size/duration from IndexedDB on revisit |
 | Numbering stability | ✅ Pass | No duplicates from app-forum-topic |
@@ -144,11 +143,16 @@ Untracked files:
 2. **`beforescriptexecute` Firefox-only** — Ad script blocking limited to Firefox
 3. **No HLS/DASH probe** — Only MP4/EBML supported
 4. **Probe requires `showVideoInfo: true`** — By design
+5. **Download tab origin restriction** — Same-origin only for direct download (Copy still works cross-origin)
+6. **Playlist/blob/MediaSource videos** — No direct file, marked accordingly in Download tab
+7. **Token expiry** — Query tokens on video URLs may expire before late downloads
 
 ---
 
 ## Next Steps
 
-1. Commit and tag v3.5.5
-2. Push to GitHub private repo
-3. Monitor shahvani.com for structural changes affecting detection
+1. Create release ZIP backup in `backups/releases/v3.6.0.user.js.zip` with SHA256
+2. Create git bundle in `backups/git-bundles/v3.6.0.bundle` and verify
+3. Update `BACKUP_MANIFEST.md`
+4. `git add . && git commit -m "v3.6.0: Theme Color, Download tab, Unlock & Load All" && git tag v3.6.0`
+5. Await user approval → Push to GitHub public repo

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Shahvani Ultra Lite
 // @namespace    local.shahvani.ultralite
-// @version      3.5.5
-// @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme presets, video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
+// @version      3.6.0
+// @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, native Firefox download), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
 // @author       parham
 // @homepageURL  https://github.com/parhamghahremani
 // @match        *://shahvani.com/*
@@ -15,7 +15,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '3.5.5';
+  const VERSION = '3.6.0';
   const KEY = 'shvUltraLite.settings.v3';
   const LEGACY_KEYS = ['shvUltraLite.settings.v2'];
   const IDB_NAME = 'shvUltraLiteDB';
@@ -109,7 +109,7 @@
 
     lang: 'en',
     theme: 'system',
-    accent: '#00d4aa',
+    themeColor: 'default',   // v3.6.0: replaces accent + themePreset (one source for every UI color)
     scale: 'm',
     compact: false,
     calmMenu: false,
@@ -118,7 +118,6 @@
     idle: 0.9,
 
     // v3.3.0 features
-    themePreset: 'default',
     showFabStats: true,
 
     // v3.4.0 features
@@ -136,20 +135,42 @@
     scale: ['s', 'm', 'l'],
     side: ['left', 'right'],
     autoReleaseMin: [1, 3, 5, 10, 30],
-    themePreset: ['default', 'midnight', 'forest', 'sunset', 'monochrome', 'custom'],
     videoProbe: ['off', 'cache', 'auto']
   };
 
-  const THEME_PRESETS = {
-    default: { name: 'Default', accent: '#00d4aa', darkBg: '#1e1e2e', lightBg: '#f0f2f5' },
-    midnight: { name: 'Midnight', accent: '#818cf8', darkBg: '#0f172a', lightBg: '#e0e7ff' },
-    forest: { name: 'Forest', accent: '#34d399', darkBg: '#064e3b', lightBg: '#d1fae5' },
-    sunset: { name: 'Sunset', accent: '#fbbf24', darkBg: '#7c2d12', lightBg: '#fef3c7' },
-    monochrome: { name: 'Monochrome', accent: '#9ca3af', darkBg: '#111827', lightBg: '#f3f4f6' },
-    custom: { name: 'Custom', accent: null, darkBg: null, lightBg: null }
+  // v3.6.0: Theme Color = accent + optional surface tint (dark / light). null tint = stock colors.
+  const THEME_COLORS = {
+    default:    { name: { en: 'Teal',       fa: 'سبزآبی' },   accent: '#00d4aa', darkBg: null,      lightBg: null },
+    midnight:   { name: { en: 'Midnight',   fa: 'نیمه‌شب' },  accent: '#818cf8', darkBg: '#0f172a', lightBg: '#e0e7ff' },
+    forest:     { name: { en: 'Forest',     fa: 'جنگل' },     accent: '#34d399', darkBg: '#064e3b', lightBg: '#d1fae5' },
+    sunset:     { name: { en: 'Sunset',     fa: 'غروب' },     accent: '#fbbf24', darkBg: '#7c2d12', lightBg: '#fef3c7' },
+    monochrome: { name: { en: 'Monochrome', fa: 'تک‌رنگ' },   accent: '#9ca3af', darkBg: '#111827', lightBg: '#f3f4f6' },
+    ocean:      { name: { en: 'Ocean',      fa: 'اقیانوس' },  accent: '#22d3ee', darkBg: '#083344', lightBg: '#cffafe' },
+    coral:      { name: { en: 'Coral',      fa: 'مرجانی' },   accent: '#f87171', darkBg: '#450a0a', lightBg: '#fee2e2' },
+    rose:       { name: { en: 'Rose',       fa: 'رز' },       accent: '#f472b6', darkBg: '#500724', lightBg: '#fce7f3' }
   };
+  ENUMS.themeColor = Object.keys(THEME_COLORS);
 
-  const ACCENTS = ['#00d4aa', '#818cf8', '#34d399', '#fbbf24', '#f87171', '#f472b6'];
+  /**
+   * v3.6.0: map the settings of 3.5.x (accent + themePreset) onto a Theme Color, keeping what the user saw:
+   * a non-custom preset always won over the saved accent; otherwise the nearest swatch to the saved accent.
+   */
+  function migrateThemeColor(input) {
+    const p = typeof input.themePreset === 'string' ? input.themePreset : '';
+    if (p && p !== 'custom' && THEME_COLORS[p]) return p;
+    const hex = typeof input.accent === 'string' && /^#[0-9a-f]{6}$/i.test(input.accent) ? input.accent.toLowerCase() : '';
+    if (!hex) return 'default';
+    const rgb = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+    const a = rgb(hex);
+    let best = 'default';
+    let bestDist = Infinity;
+    for (const [key, c] of Object.entries(THEME_COLORS)) {
+      const b = rgb(c.accent);
+      const d = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+      if (d < bestDist) { best = key; bestDist = d; }
+    }
+    return best;
+  }
 
   const KNOWN_AD_HOSTS = [
     'doubleclick.net', 'googlesyndication.com', 'googleadservices.com', 'adnxs.com',
@@ -189,8 +210,6 @@
             .filter(x => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(x))))
             .slice(0, MAX_CUSTOM_AD_HOSTS);
         }
-      } else if (key === 'accent') {
-        if (typeof val === 'string' && /^#[0-9a-f]{6}$/i.test(val)) out[key] = val.toLowerCase();
       } else if (key === 'fabY') {
         if (typeof val === 'number' && val >= 0 && val <= 1) out[key] = val;
       } else if (key === 'idle') {
@@ -200,6 +219,10 @@
       } else if (typeof val === typeof def) {
         out[key] = val;
       }
+    }
+    // v3.6.0: settings saved by 3.5.x carry accent / themePreset instead of themeColor
+    if (!ENUMS.themeColor.includes(input.themeColor) && ('accent' in input || 'themePreset' in input)) {
+      out.themeColor = migrateThemeColor(input);
     }
     return out;
   }
@@ -587,11 +610,10 @@
       secLang: 'Language',
       lang: 'Language',
       secLook: 'Appearance',
-      theme: 'Theme',
+      theme: 'Mode',
       tSys: 'System',
       tDark: 'Dark',
       tLight: 'Light',
-      accent: 'Accent color',
       scale: 'Text size',
       sS: 'Small',
       sM: 'Medium',
@@ -617,16 +639,8 @@
       aboutText: 'Runs on the proven v3 media engine: delayed or instant scan, blob and stream videos left alone, tap to unlock and play, gesture-based playback guard.',
 
       // v3.3.0 additions
-      secThemes: 'Theme Presets',
-      themePreset: 'Preset',
       showFabStats: 'FAB stats tooltip',
       showFabStatsD: 'Show detailed stats on FAB hover/long-press.',
-      presetDefault: 'Default',
-      presetMidnight: 'Midnight',
-      presetForest: 'Forest',
-      presetSunset: 'Sunset',
-      presetMonochrome: 'Monochrome',
-      presetCustom: 'Custom',
 
       // Placeholders
       phEmergency: 'Emergency lock is on. Turn it off to unlock.',
@@ -690,6 +704,39 @@
       pauseAll: 'Pause All',
       releaseBtn: 'Release',
       releaseConfirm: 'Confirm release? Videos: {v}, Frames: {f}',
+      // v3.6.0: Download tab, Unlock & Load All, Theme Color
+      tabDownload: 'Download',
+      secThemeColor: 'Theme Color',
+      dlSelectedCount: 'Selected: {n} of {m}',
+      dlSelectAll: 'Select all',
+      dlDeselectAll: 'Deselect all',
+      dlDownload: 'Download Selected ({n})',
+      dlCopy: 'Copy Selected Links ({n})',
+      dlConfirm: 'Send {n} downloads? Tap again',
+      dlEmpty: 'No videos found on this page.',
+      dlNote: 'Downloads go to the Firefox download manager. Only videos from this same site can be downloaded here; for any other link use Copy. Nothing is downloaded until you tap.',
+      dlOffPage: 'Not on this page',
+      dlStream: 'Stream playlist: no direct file',
+      dlNoLink: 'No usable link',
+      dlNoDirect: 'Other site: copy the link instead',
+      dlTipSelect: 'Select this video',
+      dlTipDownload: 'Download this video',
+      dlTipCopy: 'Copy this video link',
+      stDlNone: 'Nothing selected.',
+      stDlSending: 'Sending downloads: {i} of {n}',
+      stDlSent: 'Sent {n} download(s) to Firefox. Skipped: {m}.',
+      stDlUnavailable: 'None of these can be downloaded here ({m}). Use Copy link.',
+      stDlBusy: 'Downloads are still being sent.',
+      stDlLimit: 'Selection limit reached ({n}).',
+      stCopyDone: 'Copied {n} link(s). Without a link: {m}.',
+      stCopyNone: 'No usable links to copy. Without a link: {m}.',
+      stCopyManual: 'Clipboard blocked. The links are shown below: copy them manually.',
+      loadAllBtn: 'Unlock & Load All Videos',
+      loadAllConfirm: 'Load {n} video(s)? Tap again',
+      loadAllConfirmMany: 'Load {n} videos? Heavy on data and memory. Tap again',
+      stNoLocked: 'No locked videos to load.',
+      stLoadAllStart: 'Loading {n} video(s)...',
+      stLoadAllDone: 'Unlocked and started loading {n} video(s).',
       filteredAds: 'Filtered Ads'
     },
     fa: {
@@ -798,11 +845,10 @@
       secLang: 'زبان',
       lang: 'زبان',
       secLook: 'ظاهر',
-      theme: 'پوسته',
+      theme: 'حالت',
       tSys: 'سیستم',
       tDark: 'تیره',
       tLight: 'روشن',
-      accent: 'رنگ تأکید',
       scale: 'اندازهٔ متن',
       sS: 'کوچک',
       sM: 'متوسط',
@@ -828,16 +874,8 @@
       aboutText: 'بر پایهٔ موتور رسانهٔ اثبات‌شدهٔ نسخهٔ ۳: اسکن با تأخیر یا فوری، رها کردن ویدیوهای blob و استریم، بازکردن و پخش با لمس و نگهبان پخش بر اساس لمس.',
 
       // v3.3.0 additions
-      secThemes: 'پیش‌تنظیم‌های پوسته',
-      themePreset: 'پیش‌تنظیم',
       showFabStats: 'نمای tooltip آمار در دکمه',
       showFabStatsD: 'نمایش آمار تفصیلی با هاور/فشار طولانی روی دکمه.',
-      presetDefault: 'پیش‌فرض',
-      presetMidnight: 'نیمه‌شب',
-      presetForest: 'جنگل',
-      presetSunset: 'غروب',
-      presetMonochrome: 'یک‌رنگ',
-      presetCustom: 'سفارشی',
 
       // Placeholders
       phEmergency: 'قفل اضطراری روشن است. برای بازکردن، ابتدا خاموشش کنید.',
@@ -900,6 +938,39 @@
       pauseAll: 'مکث همه',
       releaseBtn: 'آزادسازی',
       releaseConfirm: 'آیا مطمئنید؟ ویدیو: {v}، فریم: {f}',
+      // v3.6.0: Download tab, Unlock & Load All, Theme Color
+      tabDownload: 'دانلود',
+      secThemeColor: 'رنگ تم',
+      dlSelectedCount: 'انتخاب‌شده: {n} از {m}',
+      dlSelectAll: 'انتخاب همه',
+      dlDeselectAll: 'لغو انتخاب همه',
+      dlDownload: 'دانلود انتخاب‌شده‌ها ({n})',
+      dlCopy: 'کپی لینک انتخاب‌شده‌ها ({n})',
+      dlConfirm: 'ارسال {n} دانلود؟ دوباره لمس کنید',
+      dlEmpty: 'ویدیویی در این صفحه پیدا نشد.',
+      dlNote: 'دانلودها به مدیر دانلود Firefox می‌روند. اینجا فقط ویدیوهای همین سایت دانلود می‌شوند؛ برای هر لینک دیگر از کپی استفاده کنید. تا لمس نکنید چیزی دانلود نمی‌شود.',
+      dlOffPage: 'در این صفحه نیست',
+      dlStream: 'پلی‌لیست استریم: فایل مستقیم ندارد',
+      dlNoLink: 'لینک قابل‌استفاده ندارد',
+      dlNoDirect: 'سایت دیگر: لینک را کپی کنید',
+      dlTipSelect: 'انتخاب این ویدیو',
+      dlTipDownload: 'دانلود این ویدیو',
+      dlTipCopy: 'کپی لینک این ویدیو',
+      stDlNone: 'چیزی انتخاب نشده.',
+      stDlSending: 'در حال ارسال دانلودها: {i} از {n}',
+      stDlSent: '{n} دانلود به Firefox فرستاده شد. ردشده: {m}.',
+      stDlUnavailable: 'هیچ‌کدام اینجا قابل دانلود نیستند ({m}). از کپی لینک استفاده کنید.',
+      stDlBusy: 'ارسال دانلودها هنوز ادامه دارد.',
+      stDlLimit: 'به سقف انتخاب رسیدید ({n}).',
+      stCopyDone: '{n} لینک کپی شد. بدون لینک: {m}.',
+      stCopyNone: 'لینک قابل‌استفاده‌ای برای کپی نیست. بدون لینک: {m}.',
+      stCopyManual: 'کلیپ‌بورد مسدود است. لینک‌ها پایین نشان داده شده‌اند: دستی کپی کنید.',
+      loadAllBtn: 'باز کردن و بارگذاری همه ویدیوها',
+      loadAllConfirm: 'بارگذاری {n} ویدیو؟ دوباره لمس کنید',
+      loadAllConfirmMany: 'بارگذاری {n} ویدیو؟ مصرف داده و حافظه بالاست. دوباره لمس کنید',
+      stNoLocked: 'ویدیوی قفلی برای بارگذاری نیست.',
+      stLoadAllStart: 'در حال بارگذاری {n} ویدیو...',
+      stLoadAllDone: '{n} ویدیو باز شد و بارگذاری آغاز شد.',
       filteredAds: 'تبلیغات فیلترشده',
     }
   };
@@ -1515,6 +1586,7 @@
       poster.alt = '';
       poster.loading = 'lazy';
       poster.decoding = 'async';
+      poster.addEventListener('load', () => storeThumb(thumbKey(entry), poster, poster.naturalWidth, poster.naturalHeight, 'poster'));
       poster.src = entry.poster;
       button.prepend(poster);
     }
@@ -1652,6 +1724,7 @@
       probeState: '',       // '' | queued | running | done | failed
       probed: false,        // a probe (or cached probe) already ran for this video
       inView: false,
+      fullLoad: false,      // v3.6.0: set by "Unlock & Load All": restore with preload=auto
       ...videoGeometry(video)
     };
 
@@ -2245,7 +2318,8 @@
     }
 
     video.removeAttribute('autoplay');
-    video.preload = 'metadata';
+    video.preload = entry.fullLoad ? 'auto' : 'metadata';
+    entry.fullLoad = false;
     // Setting src starts the load by itself; restored <source> attributes do not, so load() is needed.
     if (!restoredDirect && restoredSources) {
       try { NATIVE.load.call(video); } catch (_) {}
@@ -2322,6 +2396,8 @@
         updatePlaceholderInfo(entry);
       }
     }, { once: true });
+
+    video.addEventListener('loadeddata', () => captureFrame(entry), { once: true });
 
     // v3.4.3: Don't call video.load() - browser loads automatically when src is set
 
@@ -3041,7 +3117,7 @@
     const media = event.target;
     if (!(media instanceof HTMLMediaElement)) return;
     const entry = videoStates.get(media);
-    if (entry && entry.loaded) { entry.pausedAt = Date.now(); saveResumeNow(entry); }
+    if (entry && entry.loaded) { entry.pausedAt = Date.now(); saveResumeNow(entry); captureFrame(entry); }
   }, true);
 
   // Resume position is saved on pause and when the page is hidden/closed (not only on "release").
@@ -3306,6 +3382,390 @@
   } catch (_) {}
 
   /* ======================================================================
+   * 15b. Download tab and "Unlock & Load All" (v3.6.0)
+   *   - The Download list is read straight from the page DOM, so it works while the script is Off.
+   *   - Nothing here requests anything by itself: a download / copy happens only on a tap, thumbnails are
+   *     drawn from images / frames the page already has, links come from data the page already holds.
+   *   - Downloads use a plain <a download> click: Firefox's own download manager does the rest.
+   * ==================================================================== */
+
+  const SEL_KEY = 'shvUltraLite.selection.v1';
+  const MAX_SELECTION = 300;
+  const DOWNLOAD_GAP_MS = 500;        // gap between two download clicks (Firefox owns the queue)
+  const DOWNLOAD_CONFIRM_OVER = 10;   // more than this needs a second tap
+  const LOAD_ALL_GAP_MS = 200;
+  const LOAD_ALL_WARN_OVER = 20;
+  const THUMB_W = 112;
+  const THUMB_H = 63;
+  const THUMB_MAX = 150;
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const ICON_DOWNLOAD = 'M12 4v11M7 11l5 5 5-5M5 20h14';
+  const ICON_COPY = 'M8 8h12v12H8zM16 8V4H4v12h4';
+
+  const selection = new Map();   // key -> { k, u, i, d, s }  (key, url, number, duration, size) - survives DOM changes
+  const thumbCache = new Map();  // key -> { canvas, kind: 'poster' | 'frame' }
+  const dlUI = { rows: new Map(), count: null, btnDl: null, btnCopy: null, area: null };
+  let dlBusy = false;
+  let loadAllBusy = false;
+
+  function loadSelection() {
+    try {
+      const raw = sessionStorage.getItem(SEL_KEY);
+      const list = raw ? JSON.parse(raw) : null;
+      if (!Array.isArray(list)) return;
+      for (const item of list.slice(0, MAX_SELECTION)) {
+        if (!item || typeof item.k !== 'string' || typeof item.u !== 'string' || !/^https?:/i.test(item.u)) continue;
+        selection.set(item.k, { k: item.k, u: item.u, i: Number(item.i) || 0, d: Number(item.d) || 0, s: Number(item.s) || 0 });
+      }
+    } catch (_) {}
+  }
+
+  function saveSelection() {
+    try { sessionStorage.setItem(SEL_KEY, JSON.stringify(Array.from(selection.values()))); } catch (_) {}
+  }
+
+  loadSelection();
+  window.addEventListener('pagehide', saveSelection);
+
+  /** Best known direct URL of a <video> ('' for blob / MediaSource / no source). Never opens or loads anything. */
+  function videoURLOf(video, entry) {
+    let raw = '';
+    const cur = video.currentSrc;
+    if (cur && /^https?:/i.test(cur)) raw = cur;
+    else if (entry && isUsableURL(entry.videoSrc) && !isBlobURL(entry.videoSrc)) raw = entry.videoSrc;
+    else if (!video.srcObject) raw = readSourceInfo(video, getVideoSources(video)).videoSrc || '';
+    if (!isUsableURL(raw) || isBlobURL(raw)) return '';
+    try { return new URL(raw, document.baseURI).href; } catch (_) { return ''; }
+  }
+
+  function thumbKey(entry) {
+    const el = entry && entry.element;
+    const url = el ? videoURLOf(el, entry) : '';
+    return url ? hashKey(videoKeyUrl(url)) : '';
+  }
+
+  /** Draws an already-loaded image / video frame into a small canvas (cover crop). No network, no pixel reads. */
+  function storeThumb(key, source, sw, sh, kind) {
+    if (!key || !(sw > 0 && sh > 0)) return;
+    const old = thumbCache.get(key);
+    if (old && old.kind === 'poster' && kind !== 'poster') return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = THUMB_W;
+      canvas.height = THUMB_H;
+      const target = THUMB_W / THUMB_H;
+      let cw = sw;
+      let ch = sh;
+      if (sw / sh > target) cw = sh * target; else ch = sw / target;
+      canvas.getContext('2d').drawImage(source, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, THUMB_W, THUMB_H);
+      thumbCache.delete(key);
+      thumbCache.set(key, { canvas, kind });
+      while (thumbCache.size > THUMB_MAX) thumbCache.delete(thumbCache.keys().next().value);
+    } catch (_) {}
+  }
+
+  function captureFrame(entry) {
+    const video = entry && entry.element;
+    if (!video || video.readyState < 2 || !(video.videoWidth > 0)) return;
+    const key = thumbKey(entry);
+    const old = thumbCache.get(key);
+    if (!key || (old && old.kind === 'poster')) return;
+    storeThumb(key, video, video.videoWidth, video.videoHeight, 'frame');
+  }
+
+  /** { ok, url, sameOrigin } or { ok: false, reason: 'stream' | 'bad' } - a fake link is never produced. */
+  function linkInfo(raw) {
+    let u;
+    try { u = new URL(raw, document.baseURI); } catch (_) { return { ok: false, reason: 'bad' }; }
+    if (!/^https?:$/.test(u.protocol)) return { ok: false, reason: 'bad' };
+    if (/\.(m3u8|mpd)$/i.test(u.pathname)) return { ok: false, reason: 'stream' };
+    return { ok: true, url: u.href, sameOrigin: u.origin === location.origin };
+  }
+
+  /** Rows of the Download list: videos of this page (DOM order, same numbering as the cards) + selected ones that left the page. */
+  function downloadRows() {
+    const rows = [];
+    const live = new Set();
+    let n = 0;
+    for (const el of document.querySelectorAll('video')) {
+      const entry = videoStates.get(el);
+      const url = videoURLOf(el, entry);
+      if (!url) continue;
+      n++;
+      const key = hashKey(videoKeyUrl(url));
+      if (live.has(key)) continue;
+      live.add(key);
+      const snap = selection.get(key);
+      let duration = entry && entry.videoDuration > 0 ? entry.videoDuration : (Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0);
+      let size = entry && entry.videoSize > 0 ? entry.videoSize : 0;
+      if (snap) { duration = duration || snap.d; size = size || snap.s; }
+      rows.push({ key, url, index: n, duration, size, live: true });
+    }
+    for (const snap of selection.values()) {
+      if (!live.has(snap.k)) rows.push({ key: snap.k, url: snap.u, index: snap.i, duration: snap.d, size: snap.s, live: false });
+    }
+    return rows;
+  }
+
+  function selectedRecs() {
+    return downloadRows().filter(rec => selection.has(rec.key));
+  }
+
+  function selectRec(rec, on, noSave) {
+    if (on) {
+      if (!selection.has(rec.key) && selection.size >= MAX_SELECTION) { setStatus('stDlLimit', { n: MAX_SELECTION }, true); return false; }
+      selection.set(rec.key, { k: rec.key, u: rec.url, i: rec.index, d: rec.duration, s: rec.size });
+    } else {
+      selection.delete(rec.key);
+    }
+    if (!noSave) saveSelection();
+    return true;
+  }
+
+  function tabLabel(id, key) {
+    return id === 'download' && selection.size ? t(key) + ' (' + selection.size + ')' : t(key);
+  }
+
+  function refreshDownloadUI() {
+    const ui = state.ui;
+    if (ui) {
+      const tab = ui.tabs.querySelector('[data-tab="download"]');
+      if (tab) tab.textContent = tabLabel('download', 'tabDownload');
+    }
+    if (dlUI.count && dlUI.count.isConnected) {
+      dlUI.count.textContent = t('dlSelectedCount', { n: selection.size, m: dlUI.rows.size });
+      if (dlUI.btnDl) dlUI.btnDl.refresh();
+      if (dlUI.btnCopy) dlUI.btnCopy.refresh();
+    }
+  }
+
+  /** Brings every row checkbox in line with the selection (in place - no list rebuild). */
+  function syncDownloadRows() {
+    for (const [key, ref] of Array.from(dlUI.rows)) {
+      const on = selection.has(key);
+      ref.cb.setAttribute('data-on', on ? '1' : '0');
+      ref.cb.setAttribute('aria-checked', String(on));
+      if (!on && !ref.rec.live) { ref.row.remove(); dlUI.rows.delete(key); }   // selected video that left the page
+    }
+    refreshDownloadUI();
+  }
+
+  function toggleRow(rec) {
+    if (!selectRec(rec, !selection.has(rec.key))) return;
+    syncDownloadRows();
+  }
+
+  function setAllSelected(on) {
+    if (on) {
+      for (const ref of dlUI.rows.values()) if (!selectRec(ref.rec, true, true)) break;
+    } else {
+      selection.clear();
+    }
+    saveSelection();
+    syncDownloadRows();
+  }
+
+  /** One plain <a download> click. Inside our shadow root, so the page's own click handlers never see it. */
+  function triggerDownload(url) {
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.setAttribute('download', '');
+      a.rel = 'noopener';
+      a.style.display = 'none';
+      (state.ui ? state.ui.root : (document.body || document.documentElement)).appendChild(a);
+      a.click();
+      window.setTimeout(() => a.remove(), 1000);
+    } catch (_) {}
+  }
+
+  /** Same-origin direct links only: for another origin Firefox ignores "download" and would navigate away. */
+  function downloadRecs(recs) {
+    if (dlBusy) { setStatus('stDlBusy', null, true); return; }
+    const urls = [];
+    let skipped = 0;
+    for (const rec of recs) {
+      const info = linkInfo(rec.url);
+      if (info.ok && info.sameOrigin && !urls.includes(info.url)) urls.push(info.url);
+      else if (!(info.ok && info.sameOrigin)) skipped++;
+    }
+    if (!urls.length) { setStatus('stDlUnavailable', { m: skipped }, true); return; }
+
+    dlBusy = true;
+    let i = 0;
+    const next = () => {
+      triggerDownload(urls[i++]);
+      if (i < urls.length) {
+        setStatus('stDlSending', { i, n: urls.length });
+        window.setTimeout(next, DOWNLOAD_GAP_MS);
+      } else {
+        dlBusy = false;
+        setStatus('stDlSent', { n: urls.length, m: skipped }, true);
+      }
+    };
+    next();
+  }
+
+  function showManualCopy(text) {
+    const area = dlUI.area;
+    if (area && area.isConnected) {
+      area.value = text;
+      area.removeAttribute('hidden');
+      try { area.focus(); area.select(); } catch (_) {}
+    }
+    setStatus('stCopyManual', null, true);
+  }
+
+  /** One link per line (what external download managers expect). Only real links; nothing is opened. */
+  function copyRecs(recs) {
+    const links = [];
+    let missing = 0;
+    for (const rec of recs) {
+      const info = linkInfo(rec.url);
+      if (!info.ok) missing++;
+      else if (!links.includes(info.url)) links.push(info.url);
+    }
+    if (!links.length) { setStatus('stCopyNone', { m: missing }, true); return; }
+    const text = links.join('\n');
+    copyText(text).then(() => {
+      if (dlUI.area && dlUI.area.isConnected) dlUI.area.setAttribute('hidden', '');
+      setStatus('stCopyDone', { n: links.length, m: missing }, true);
+    }, () => showManualCopy(text));
+  }
+
+  function lockedVideoEntries() {
+    const list = [];
+    for (const entry of state.mediaEntries) {
+      if (entry.kind === 'video' && !entry.audio && !entry.loaded && entry.element && entry.element.isConnected) list.push(entry);
+    }
+    return list;
+  }
+
+  /**
+   * "Unlock & Load All Videos": the normal activation path (activateVideo) for every locked video, one after the
+   * other, restored with preload=auto so the browser starts buffering. Not a download to disk. Release is untouched.
+   */
+  function loadAllVideos() {
+    if (state.emergency) { setStatus('stEmergencyBlocked', null, true); return; }
+    if (loadAllBusy) return;
+    const list = lockedVideoEntries();
+    if (!list.length) { setStatus('stNoLocked', null, true); return; }
+
+    loadAllBusy = true;
+    setStatus('stLoadAllStart', { n: list.length }, true);
+    let index = 0;
+    let done = 0;
+    const step = () => {
+      if (index >= list.length || !settings.enabled || state.emergency) {
+        loadAllBusy = false;
+        setStatus('stLoadAllDone', { n: done }, true);
+        return;
+      }
+      const entry = list[index++];
+      if (state.mediaEntries.has(entry) && !entry.loaded && entry.element && entry.element.isConnected) {
+        entry.fullLoad = true;
+        activateVideo(entry, false, true);
+        done++;
+      }
+      window.setTimeout(step, LOAD_ALL_GAP_MS);
+    };
+    step();
+  }
+
+  function svgIcon(path) {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '18');
+    svg.setAttribute('height', '18');
+    svg.setAttribute('aria-hidden', 'true');
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', path);
+    p.setAttribute('fill', 'none');
+    p.setAttribute('stroke', 'currentColor');
+    p.setAttribute('stroke-width', '2');
+    p.setAttribute('stroke-linecap', 'round');
+    p.setAttribute('stroke-linejoin', 'round');
+    svg.append(p);
+    return svg;
+  }
+
+  function downloadRow(rec) {
+    const info = linkInfo(rec.url);
+    const canDownload = info.ok && info.sameOrigin;
+    const on = selection.has(rec.key);
+
+    const cb = h('span', { class: 'cb', role: 'checkbox', tabindex: '0', 'aria-label': t('dlTipSelect'),
+      'aria-checked': String(on), 'data-on': on ? '1' : '0', text: '✓' });
+
+    const thumb = h('div', { class: 'dlth', 'aria-hidden': 'true' });
+    const cached = thumbCache.get(rec.key);
+    if (cached) thumb.append(cached.canvas); else thumb.textContent = '▶';
+
+    const meta = [formatDuration(rec.duration), formatSize(rec.size)].filter(Boolean).join(' · ');
+    const notes = [];
+    if (!rec.live) notes.push(t('dlOffPage'));
+    if (!info.ok) notes.push(t(info.reason === 'stream' ? 'dlStream' : 'dlNoLink'));
+    else if (!info.sameOrigin) notes.push(t('dlNoDirect'));
+    const infoBox = h('div', { class: 'dlinfo' }, h('b', { text: '#' + (rec.index || '-') }),
+      meta ? h('small', { text: meta }) : null, ...notes.map(text => h('small', { text })));
+
+    const action = (path, tip, fn, disabled) => {
+      const button = h('button', { class: 'ib', type: 'button', title: tip, 'aria-label': tip });
+      button.append(svgIcon(path));
+      if (disabled) button.setAttribute('disabled', '');
+      button.addEventListener('click', event => { event.stopPropagation(); fn(); });
+      return button;
+    };
+    const actions = h('div', { class: 'dlact' },
+      action(ICON_DOWNLOAD, t('dlTipDownload'), () => downloadRecs([rec]), !canDownload),
+      action(ICON_COPY, t('dlTipCopy'), () => copyRecs([rec]), !info.ok));
+
+    const row = h('div', { class: 'dlrow' + (rec.live ? '' : ' off') }, cb, thumb, infoBox, actions);
+    activate(cb, () => toggleRow(rec));
+    infoBox.addEventListener('click', () => toggleRow(rec));
+    thumb.addEventListener('click', () => toggleRow(rec));
+    return { row, cb, rec };
+  }
+
+  /** Download tab: independent of the script's On/Off state (no dim(), no entries needed). */
+  function buildDownload() {
+    const f = document.createDocumentFragment();
+    const rows = downloadRows();
+    dlUI.rows = new Map();
+    for (const rec of rows) if (selection.has(rec.key)) selectRec(rec, true, true);   // refresh snapshots (duration / size)
+
+    dlUI.count = h('b', { class: 'dlcount', text: t('dlSelectedCount', { n: selection.size, m: rows.length }) });
+    dlUI.btnDl = confirmButton(() => t('dlDownload', { n: selection.size }), () => {
+      const n = selection.size;
+      if (!n) { setStatus('stDlNone', null, true); return null; }
+      return n > DOWNLOAD_CONFIRM_OVER ? t('dlConfirm', { n }) : false;
+    }, () => downloadRecs(selectedRecs()), 'p');
+    dlUI.btnCopy = confirmButton(() => t('dlCopy', { n: selection.size }), () => {
+      if (!selection.size) { setStatus('stDlNone', null, true); return null; }
+      return false;
+    }, () => copyRecs(selectedRecs()));
+    dlUI.area = h('textarea', { dir: 'ltr', spellcheck: 'false', readonly: '', hidden: '' });
+
+    f.append(section(t('tabDownload'), h('div', { class: 'pad' },
+      dlUI.count,
+      h('div', { class: 'two' },
+        h('button', { class: 'btn', type: 'button', text: t('dlSelectAll'), onclick: () => setAllSelected(true) }),
+        h('button', { class: 'btn', type: 'button', text: t('dlDeselectAll'), onclick: () => setAllSelected(false) })),
+      dlUI.btnDl, dlUI.btnCopy, dlUI.area,
+      h('div', { class: 'note', text: t('dlNote') }))));
+
+    const box = h('div', { class: 'dlbox' });
+    if (!rows.length) box.append(h('div', { class: 'note', text: t('dlEmpty') }));
+    for (const rec of rows) {
+      const ref = downloadRow(rec);
+      dlUI.rows.set(rec.key, ref);
+      box.append(ref.row);
+    }
+    f.append(box);
+    return f;
+  }
+
+  /* ======================================================================
    * 16. Menu (v3.1.0 neumorphic slide-over drawer + v6 7 tabs)
    * ==================================================================== */
 
@@ -3449,6 +3909,27 @@
     .dot[aria-pressed="true"] { border-color: var(--fg); }
     .note { font-size: .88em; color: var(--mut); padding: 2px 4px; }
 
+    /* v3.6.0: Download tab */
+    .cb:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+    .dlcount { font-variant-numeric: tabular-nums; padding: 2px 4px; }
+    .dlbox { background: var(--card); border: 1px solid var(--bd); border-radius: 16px; padding: 4px 6px; }
+    .dlrow { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-top: 1px solid var(--bd); }
+    .dlrow:first-child { border-top: 0; }
+    .dlrow.off { opacity: .75; }
+    .dlrow .cb { cursor: pointer; }
+    .dlth { flex: none; width: 84px; height: 47px; border-radius: 8px; overflow: hidden; display: grid; place-items: center;
+      background: var(--card); border: 1px solid var(--bd); color: var(--mut); font-size: 18px; cursor: pointer; }
+    .dlth canvas { width: 100%; height: 100%; display: block; }
+    .dlinfo { flex: 1; min-width: 0; cursor: pointer; }
+    .dlinfo b { display: block; font-weight: 650; }
+    .dlinfo small { display: block; color: var(--mut); font-size: .82em; line-height: 1.35; }
+    .dlact { flex: none; display: flex; gap: 6px; }
+    .ib { all: unset; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; cursor: pointer;
+      background: var(--card); border: 1px solid var(--bd); color: var(--fg); }
+    .ib svg { display: block; }
+    .ib[disabled] { opacity: .35; cursor: default; }
+    .ib:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+
     .toast { position: fixed; z-index: ${Z_INDEX_TOAST}; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px);
       max-width: 86vw; padding: 10px 18px; border-radius: 999px; background: rgba(14,17,30,.95); color: #fff; font-weight: 600;
       opacity: 0; pointer-events: none; transition: opacity .22s, transform .22s; border: 1px solid rgba(255,255,255,.16); }
@@ -3475,10 +3956,9 @@
     return (r * 299 + g * 587 + b * 114) / 1000 > 140 ? '#0a1a18' : '#ffffff';
   }
 
-  /** v3.5.5: the accent that is really in force (a preset wins over the saved accent, "custom" uses it). */
+  /** v3.6.0: the accent of the chosen Theme Color (single source for every UI color). */
   function effectiveAccent() {
-    const preset = THEME_PRESETS[settings.themePreset];
-    return (preset && preset.accent && settings.themePreset !== 'custom') ? preset.accent : settings.accent;
+    return (THEME_COLORS[settings.themeColor] || THEME_COLORS.default).accent;
   }
 
   function applyPageTheme() {
@@ -3513,10 +3993,9 @@
       root.style.setProperty('--shv-shadow-dark', '#14141e');
       root.style.setProperty('--shv-shadow-light', '#2c2c44');
     }
-    // v3.5.5: presets also tint the placeholder surface (the default / custom presets keep the stock colors)
-    const preset = THEME_PRESETS[settings.themePreset];
-    const presetBg = preset && settings.themePreset !== 'default' && settings.themePreset !== 'custom'
-      ? (isLight ? preset.lightBg : preset.darkBg) : null;
+    // v3.6.0: a Theme Color with a tint also tints the placeholder surface (the default one keeps the stock colors)
+    const tint = THEME_COLORS[settings.themeColor];
+    const presetBg = tint ? (isLight ? tint.lightBg : tint.darkBg) : null;
     if (presetBg) {
       const mix = (pct, other) => 'color-mix(in srgb, ' + presetBg + ' ' + pct + '%, ' + other + ')';
       root.style.setProperty('--shv-bg', presetBg);
@@ -3589,16 +4068,23 @@
     return h('div', { class: 'col' }, h('div', { class: 'lbl', text: label }), box);
   }
 
+  /**
+   * Two-tap button. `label` may be a function (re-read by button.refresh()). `armedLabelFn()` returns the
+   * "tap again" text, null to do nothing, or (v3.6.0) false to run the action at once.
+   */
   function confirmButton(label, armedLabelFn, action, cls) {
+    const getLabel = typeof label === 'function' ? label : () => label;
     let armed = false;
     let timer = 0;
-    const button = h('button', { class: 'btn ' + (cls || ''), type: 'button', text: label });
-    const disarm = () => { armed = false; button.textContent = label; button.classList.remove('arm'); };
+    const button = h('button', { class: 'btn ' + (cls || ''), type: 'button', text: getLabel() });
+    const disarm = () => { armed = false; button.textContent = getLabel(); button.classList.remove('arm'); };
+    button.refresh = () => { if (!armed) button.textContent = getLabel(); };
 
     button.addEventListener('click', () => {
       if (!armed) {
         const armedLabel = armedLabelFn();
         if (armedLabel === null) return;
+        if (armedLabel === false) { action(); return; }
         armed = true;
         button.textContent = armedLabel;
         button.classList.add('arm');
@@ -3649,6 +4135,12 @@
           if (!c.length) { setStatus('stNoRelease'); return null; }
           return t('releaseConfirm', { v: c.filter(e => e.kind === 'video').length, f: c.filter(e => e.kind === 'frame').length });
         }, releaseInactiveNow),
+        confirmButton(t('loadAllBtn'), () => {
+          if (state.emergency) { setStatus('stEmergencyBlocked', null, true); return null; }
+          const n = lockedVideoEntries().length;
+          if (!n) { setStatus('stNoLocked', null, true); return null; }
+          return t(n > LOAD_ALL_WARN_OVER ? 'loadAllConfirmMany' : 'loadAllConfirm', { n });
+        }, loadAllVideos),
         h('button', { class: 'btn', type: 'button', text: t('reload'), onclick: () => location.reload() })),
       checkRow('emergency', t('emergency'), t('emergencyDesc'), { checked: state.emergency, onToggle: v => { setEmergency(v); renderAll(); } })));
     return f;
@@ -3734,12 +4226,13 @@
     f.append(section(t('secLang'), h('div', { class: 'pad' },
       segment(t('lang'), settings.lang, [['en', 'English'], ['fa', 'فارسی']], v => setOpt('lang', v)))));
 
-    const dots = h('div', { class: 'dots' });
-    for (const color of ACCENTS) {
-      const dot = h('button', { class: 'dot', type: 'button', 'aria-pressed': String(effectiveAccent() === color), 'aria-label': color,
-        onclick: () => { settings.themePreset = 'custom'; setOpt('accent', color); } });
-      dot.style.background = color;
-      dots.append(dot);
+    const swatches = h('div', { class: 'dots' });
+    for (const [key, color] of Object.entries(THEME_COLORS)) {
+      const name = color.name[settings.lang] || color.name.en;
+      const dot = h('button', { class: 'dot', type: 'button', 'aria-pressed': String(settings.themeColor === key), 'aria-label': name,
+        title: name, onclick: () => setOpt('themeColor', key) });
+      dot.style.background = color.accent;
+      swatches.append(dot);
     }
     const range = h('input', { type: 'range', min: '0.3', max: '1', step: '0.05', value: String(settings.idle),
       oninput: event => { settings.idle = Number(event.target.value); applyUITheme(); },
@@ -3747,23 +4240,12 @@
 
     f.append(section(t('secLook'), h('div', { class: 'pad' },
       segment(t('theme'), settings.theme, [['system', t('tSys')], ['dark', t('tDark')], ['light', t('tLight')]], v => setOpt('theme', v)),
-      h('div', { class: 'col' }, h('div', { class: 'lbl', text: t('accent') }), dots),
       segment(t('scale'), settings.scale, [['s', t('sS')], ['m', t('sM')], ['l', t('sL')]], v => setOpt('scale', v)),
       segment(t('side'), settings.side, [['left', t('left')], ['right', t('right')]], v => setOpt('side', v)),
       h('div', { class: 'col' }, h('div', { class: 'lbl', text: t('idle') }), range))));
 
-    // v3.3.0: Theme Presets
-    const presetDots = h('div', { class: 'dots' });
-    for (const [key, preset] of Object.entries(THEME_PRESETS)) {
-      if (key === 'custom') continue; // Custom preset has no color, shown via accent dots
-      const dot = h('button', { class: 'dot', type: 'button', 'aria-pressed': String(settings.themePreset === key), 'aria-label': preset.name,
-        onclick: () => setOpt('themePreset', key) });
-      dot.style.background = preset.accent;
-      dot.title = preset.name;
-      presetDots.append(dot);
-    }
-    f.append(section(t('secThemes'), h('div', { class: 'pad' },
-      h('div', { class: 'col' }, h('div', { class: 'lbl', text: t('themePreset') }), presetDots))));
+    // v3.6.0: Theme Color (replaces the old Accent Color + Preset controls)
+    f.append(section(t('secThemeColor'), h('div', { class: 'pad' }, swatches)));
 
     // v3.4.0: Video Metadata & Inverted Neumorphic
     f.append(section(t('secVideoMeta'), h('div', { class: 'pad' },
@@ -3779,11 +4261,27 @@
     return f;
   }
 
+  /** v3.6.0: Clipboard API first, then the old execCommand route; rejects only when both fail. */
   function copyText(text) {
+    const legacy = () => new Promise((resolve, reject) => {
+      let ok = false;
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none';
+        (document.body || document.documentElement).appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        ok = document.execCommand('copy');
+        ta.remove();
+      } catch (_) {}
+      if (ok) resolve(); else reject(new Error('copy failed'));
+    });
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).catch(legacy);
     } catch (_) {}
-    return Promise.reject(new Error('no clipboard'));
+    return legacy();
   }
 
   function buildData() {
@@ -3818,7 +4316,7 @@
   }
 
   const TABS = [
-    ['home', 'tabHome', buildHome], ['video', 'tabVideo', buildVideo], ['frames', 'tabFrames', buildFrames], ['ads', 'tabAds', buildAds],
+    ['home', 'tabHome', buildHome], ['video', 'tabVideo', buildVideo], ['download', 'tabDownload', buildDownload], ['frames', 'tabFrames', buildFrames], ['ads', 'tabAds', buildAds],
     ['page', 'tabPage', buildPage], ['look', 'tabLook', buildLook], ['data', 'tabData', buildData]
   ];
 
@@ -3828,7 +4326,7 @@
 
     ui.tabs.textContent = '';
     for (const [id, key] of TABS) {
-      ui.tabs.append(h('button', { class: 'tab', type: 'button', role: 'tab', 'aria-selected': String(state.activeTab === id), text: t(key),
+      ui.tabs.append(h('button', { class: 'tab', type: 'button', role: 'tab', 'aria-selected': String(state.activeTab === id), text: tabLabel(id, key), 'data-tab': id,
         onclick: () => { state.activeTab = id; renderAll(); ui.body.scrollTop = 0; } }));
     }
 
@@ -4019,18 +4517,13 @@
       else if (mediaQuery.addListener) mediaQuery.addListener(onThemeChange);
     } catch (_) {}
 
-    applyThemePreset();
-  }
-
-  function applyThemePreset() {
-    applyPageTheme();
-    applyUITheme();
   }
 
   if (window.__SHV_TEST__) {
     Object.assign(window.__SHV_TEST__, {
       state, settings, T, DEFAULTS, KNOWN_AD_HOSTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
       videoStates, activateVideo, releaseInactiveNow, hashKey, videoKeyUrl, isLockedMedia,
+      selection, downloadRows, linkInfo, copyRecs, downloadRecs, loadAllVideos, THEME_COLORS,
       // Internal test functions
       testSanitize: (input) => sanitize(input, { ...DEFAULTS, customAdHosts: [] }),
       testIsUsableURL: (raw) => isUsableURL(raw),
