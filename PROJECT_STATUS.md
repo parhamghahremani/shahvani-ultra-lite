@@ -2,8 +2,8 @@
 
 **Last Updated**: 2026-11-23  
 **Current Version**: 3.6.0  
-**Git Commit**: b27adce (v3.6.0) — working tree clean  
-**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, pending force push)
+**Git Commit**: 9483651 (v3.6.0) — working tree clean  
+**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, force pushed 2026-11-23)
 
 ---
 
@@ -100,7 +100,7 @@ Your branch is up to date with 'origin/main'.
 nothing to commit, working tree clean
 ```
 
-**Last commit**: `b27adce` — "v3.6.0: Theme Color, Download tab, Unlock & Load All"
+**Last commit**: `9483651` — "build: update build.js to add update URLs to both dist/ and versions/ per convention"
 **Tag**: `v3.6.0` (points to b27adce)
 
 ---
@@ -123,7 +123,7 @@ nothing to commit, working tree clean
 ✅ **COMPLETE** — All items done:
 - Repository created: `https://github.com/parhamghahremani/shahvani-ultra-lite` (Public)
 - v3.6.0 pushed: 2026-11-22
-- v3.6.1 rolled back: 2026-11-23 (force push pending)
+- v3.6.1 rolled back: 2026-11-23 (force push complete)
 - Full history preserved
 
 ---
@@ -146,8 +146,8 @@ nothing to commit, working tree clean
 2. ✅ Create git bundle in `backups/git-bundles/v3.6.0.bundle` and verify
 3. ✅ Update `BACKUP_MANIFEST.md`
 4. ✅ `git add . && git commit -m "v3.6.0: Theme Color, Download tab, Unlock & Load All" && git tag v3.6.0`
-5. ⏳ Force push to GitHub to remove v3.6.1
+5. ✅ Force push to GitHub to remove v3.6.1 — **COMPLETE 2026-11-23**
 
 ---
 
-**ROLLBACK COMPLETE** — Project restored to v3.6.0. Force push pending.
+**ROLLBACK COMPLETE** — Project fully restored to v3.6.0. All files verified.
