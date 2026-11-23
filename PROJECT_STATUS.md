@@ -1,9 +1,9 @@
 # Project Status — Shahvani Ultra Lite
 
-**Last Updated**: 2026-11-22  
+**Last Updated**: 2026-11-23  
 **Current Version**: 3.6.0  
-**Git Commit**: (pending v3.6.0 commit)  
-**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, pushed 2026-11-18T10:17:20Z)
+**Git Commit**: b27adce (v3.6.0) — working tree clean  
+**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, pending force push)
 
 ---
 
@@ -97,21 +97,11 @@
 On branch main
 Your branch is up to date with 'origin/main'.
 
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)
-  (use "git restore <file>..." to discard changes in working directory)
-
-	modified:   CHANGELOG.md
-	modified:   CLAUDE.md
-	modified:   package.json
-	modified:   PROJECT_STATUS.md
-	modified:   README.md
-	new file:   versions/v3.6.0.user.js
-	new file:   dist/shahvani-ultra-lite.user.js
+nothing to commit, working tree clean
 ```
 
-**Last commit**: `b1e2571` — "v3.5.5: 7 bug fixes (aspect-ratio, FAB drag, preset persistence, inverted neumorphic, probe non-video, probeActive leak, resume race), minor improvements"
-**Pending commit**: `v3.6.0: Theme Color, Download tab, Unlock & Load All`
+**Last commit**: `b27adce` — "v3.6.0: Theme Color, Download tab, Unlock & Load All"
+**Tag**: `v3.6.0` (points to b27adce)
 
 ---
 
@@ -131,8 +121,9 @@ Changes not staged for commit:
 ## GitHub Release Status
 
 ✅ **COMPLETE** — All items done:
-- Repository created: `https://github.com/parhamghahremani/shahvani-ultra-lite` (Private)
-- Pushed: 2026-11-18T10:17:20Z (commit 2f4ad19 + tag v3.5.4)
+- Repository created: `https://github.com/parhamghahremani/shahvani-ultra-lite` (Public)
+- v3.6.0 pushed: 2026-11-22
+- v3.6.1 rolled back: 2026-11-23 (force push pending)
 - Full history preserved
 
 ---
@@ -151,8 +142,12 @@ Changes not staged for commit:
 
 ## Next Steps
 
-1. Create release ZIP backup in `backups/releases/v3.6.0.user.js.zip` with SHA256
-2. Create git bundle in `backups/git-bundles/v3.6.0.bundle` and verify
-3. Update `BACKUP_MANIFEST.md`
-4. `git add . && git commit -m "v3.6.0: Theme Color, Download tab, Unlock & Load All" && git tag v3.6.0`
-5. Await user approval → Push to GitHub public repo
+1. ✅ Create release ZIP backup in `backups/releases/v3.6.0.user.js.zip` with SHA256
+2. ✅ Create git bundle in `backups/git-bundles/v3.6.0.bundle` and verify
+3. ✅ Update `BACKUP_MANIFEST.md`
+4. ✅ `git add . && git commit -m "v3.6.0: Theme Color, Download tab, Unlock & Load All" && git tag v3.6.0`
+5. ⏳ Force push to GitHub to remove v3.6.1
+
+---
+
+**ROLLBACK COMPLETE** — Project restored to v3.6.0. Force push pending.
