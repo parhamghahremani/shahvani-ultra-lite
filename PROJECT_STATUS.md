@@ -2,8 +2,8 @@
 
 **Last Updated**: 2026-11-23  
 **Current Version**: 3.6.1  
-**Git Commit**: 9483651 (v3.6.0) — working tree has v3.6.1 changes  
-**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, force pushed 2026-11-23)
+**Git Commit**: e740f13 (v3.6.1) — working tree clean, pushed to GitHub  
+**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, pushed 2026-11-23)
 
 ---
 
@@ -100,20 +100,11 @@
 On branch main
 Your branch is up to date with 'origin/main'.
 
-Changes not staged for commit:
-  (use "git add ..." to update what will be committed)
-  (use "git restore ..." to discard changes in working directory)
-	modified:   README.md
-	modified:   CHANGELOG.md
-	modified:   CLAUDE.md
-	modified:   PROJECT_STATUS.md
-	modified:   package.json
-	new file:   dist/shahvani-ultra-lite.user.js
-	new file:   versions/v3.6.1.user.js
+nothing to commit, working tree clean
 ```
 
-**Last commit**: `9483651` — "build: update build.js to add update URLs to both dist/ and versions/ per convention"
-**Tag**: `v3.6.0` (points to b27adce)
+**Last commit**: `e740f13` — "v3.6.1: Fix lock-card size, Download tab live info, persistent cache, Release stops all, GM_download, Update URLs"
+**Tag**: `v3.6.1` (points to e740f13)
 
 ---
 
@@ -137,7 +128,7 @@ Changes not staged for commit:
 - v3.6.0 pushed: 2026-11-22
 - v3.6.1 rolled back: 2026-11-23 (force push complete)
 - Full history preserved
-- v3.6.1 ready for push after manual test approval
+- **v3.6.1 pushed to GitHub: 2026-11-23**
 
 ---
 
@@ -159,10 +150,10 @@ Changes not staged for commit:
 1. ✅ Create release ZIP backup in `backups/releases/v3.6.1.user.js.zip` with SHA256
 2. ✅ Create git bundle in `backups/git-bundles/v3.6.1.bundle` and verify
 3. ✅ Update `BACKUP_MANIFEST.md`
-4. ⏳ `git add . && git commit -m "v3.6.1: Fix lock-card size, Download tab live info, persistent cache, Release stops all, GM_download, Update URLs" && git tag v3.6.1`
-5. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey)
-6. ⏳ User approval → `gh repo create parhamghahremani/shahvani-ultra-lite --public --source=. --push` (or push to existing)
+4. ✅ `git add . && git commit -m "v3.6.1: Fix lock-card size, Download tab live info, persistent cache, Release stops all, GM_download, Update URLs" && git tag v3.6.1`
+5. ✅ Push to GitHub — **COMPLETE 2026-11-23**
+6. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey) — user to verify
 
 ---
 
-**v3.6.1 PREPARED** — All files created, backups verified. Awaiting manual test + approval.
+**v3.6.1 RELEASED** — All files committed, tagged, pushed to GitHub. Awaiting manual test verification.
