@@ -29,30 +29,36 @@ function build() {
     ensureDir(VERSIONS_DIR);
     ensureDir(DIST_DIR);
 
-    const content = fs.readFileSync(SRC_FILE, "utf-8");
+    let content = fs.readFileSync(SRC_FILE, "utf-8");
 
-    // Create versioned release (archive - no URL updates)
-    const versionedFile = path.join(VERSIONS_DIR, `v${version}.user.js`);
-    fs.writeFileSync(versionedFile, content);
-    console.log(`Created versioned archive: ${versionedFile}`);
+    // Strip any existing @downloadURL/@updateURL lines (in case src already has them)
+    content = content.replace(/^\s*\/\/\s*@downloadURL\s+.*$/gm, '');
+    content = content.replace(/^\s*\/\/\s*@updateURL\s+.*$/gm, '');
 
-    // Create dist file (latest) with @downloadURL/@updateURL pointing to stable dist/ file
-    const distFile = path.join(DIST_DIR, DIST_FILE);
     const stableUrl = `https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/${DIST_FILE}`;
 
-    // Insert @downloadURL/@updateURL after @grant line
-    let distContent = content.replace(
+    // Add @downloadURL/@updateURL after @grant line to any content
+    const addUrls = (c) => c.replace(
         /(@grant\s+none)/,
         `$1\n// @downloadURL  ${stableUrl}\n// @updateURL    ${stableUrl}`
     );
 
+    // Create versioned release (archive - WITH update URLs per convention from v3.6.1+)
+    const versionedFile = path.join(VERSIONS_DIR, `v${version}.user.js`);
+    const versionedContent = addUrls(content);
+    fs.writeFileSync(versionedFile, versionedContent);
+    console.log(`Created versioned archive: ${versionedFile} (with update URLs)`);
+
+    // Create dist file (latest) with @downloadURL/@updateURL pointing to stable dist/ file
+    const distFile = path.join(DIST_DIR, DIST_FILE);
+    const distContent = addUrls(content);
     fs.writeFileSync(distFile, distContent);
     console.log(`Created dist file with stable URLs: ${distFile}`);
     console.log(`  URLs: ${stableUrl}`);
 
     console.log(`\nBuild complete! Version: ${version}`);
     console.log(`Files:`);
-    console.log(`  - ${versionedFile} (archive)`);
+    console.log(`  - ${versionedFile} (archive with update URLs)`);
     console.log(`  - ${distFile} (stable update target)`);
 }
 
