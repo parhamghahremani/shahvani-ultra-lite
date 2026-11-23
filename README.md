@@ -4,7 +4,7 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 
 **Author:** parham  
 **Homepage:** https://github.com/parhamghahremani  
-**Version:** 3.6.0
+**Version:** 3.6.1
 
 ## Features
 
@@ -17,8 +17,8 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 | **Performance profiles** | Compatible / Balanced / Ultra — escalating optimizations |
 | **Tabbed control panel** | Overview, Video, Frames, Ads, Page, Look, Data, Download (8 tabs) |
 | **Theme Color system** | 8 presets (Teal, Midnight, Forest, Sunset, Monochrome, Ocean, Coral, Rose) — accent + optional surface tint |
-| **Download tab** | Select videos, copy links, native Firefox download (plain `<a download>`), selection persists |
-| **Unlock & Load All** | One-tap activate all locked videos with `preload=auto` (buffer, not download to disk) |
+| **Download tab** | Live size/duration/thumbnail per row, persistent cache (30 days), select/copy/download, works while script Off |
+| **Unlock & Load All / Release** | Unlock only (no play), 8s gesture guard; Release stops all unlocked videos (playing or paused), cancels Unlock |
 | **Ad host filtering** | Known ad domains (doubleclick, googlesyndication, taboola, etc.) |
 | **Video resume** | Position saved to IndexedDB on pause/pagehide, restored on next visit |
 | **Manual resource release** | One-click release of paused videos + off-screen iframes |
@@ -78,7 +78,7 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 - **Status grid** — pending/active videos & iframes
 - **Detail stats** — network resources, long tasks, cleaned entries, filtered ads
 - **Emergency mode** — red button, pauses all videos, blocks tap-to-load
-- **Unlock & Load All** — activate all locked videos with `preload=auto` (buffering, not disk download), second tap required, stronger warning above 20 videos
+- **Unlock & Load All / Release** — Unlock only (no play), 8s gesture guard; Release stops all unlocked videos (playing or paused), cancels Unlock
 
 ### Media Tab
 - **Ad filter toggle** — known ad host filtering
@@ -105,11 +105,14 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 
 ### Download Tab
 - **Video list** — all videos on page in DOM order with same numbers as lock cards
+- **Live info** — duration, size, and thumbnail land in the row the moment they are known
+- **Persistent cache** — size, duration, poster, and small JPEG thumbnail cached per video (30 days)
 - **Selection** — checkboxes, Select all / Deselect all, counter updates live
-- **Download Selected** — sends to Firefox download manager (500ms gap, >10 needs second tap)
+- **Download Selected** — sends to Firefox download manager (shahvani.com) or Tampermonkey GM_download (up.shahvani.com) (500ms gap, >10 needs second tap)
 - **Copy Selected Links** — one per line, fallback to manual copy box
 - **Per-row actions** — Download / Copy icons with tooltips
 - **Works while script is Off** — reads from DOM, no lock engine needed
+- **Own switch** — "Fill size, duration and thumbnail automatically" (on by default)
 
 ### Network Tab
 - **Blocked requests log** — recent blocked resource requests
@@ -144,6 +147,8 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| **3.6.1** | 2026-11-23 | Fixed lock-card size (734×413, 16:9), Download tab live info (size/duration/thumbnail), persistent cache 30 days, Release stops all unlocked videos, cancels Unlock, fixed Unlock busy state, fixed cache key consistency, Update URLs back (point to dist/) |
+| **3.6.0** | 2026-11-22 | Download tab (select, copy links, native Firefox download), Unlock & Load All, Theme Color (8 presets replaces Accent+Preset), sessionStorage selection persistence, Migration from 3.5.x settings |
 | **3.5.5** | 2026-11-19 | 7 bug fixes: aspect-ratio/min-height with !important, FAB vertical drag (fabY), theme preset persistence, inverted neumorphic option fixed, probe size for non-video files, probeActive counter leak, resume race condition; minor fixes: resume cleanup on finish, resume setting respect, fetch URL object fix, PiP exception, opacity slider debounce, MAX_CUSTOM_AD_HOSTS constant, Persian typo fix |
 | **3.5.4** | 2026-11-18 | Optional probe (off/cache/auto), IntersectionObserver, MP4/EBML parsing, stream cancellation |
 | **3.5.3** | 2026-11-18 | Zero-download guarantee, deterministic keys, browser guards, IndexedDB v2 resume |

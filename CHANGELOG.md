@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this format.
 
+## [3.6.1] - 2026-11-23
+
+### Added
+- **Download from `up.shahvani.com`** (and any other host):
+  - `shahvani.com` videos: unchanged, plain `<a download>` → Firefox download manager.
+  - `up.shahvani.com` videos: `GM_download` with the file name taken from the link (`qchuoafyxn.mp4`).
+  - If the manager refuses (disabled / extension not whitelisted / no permission) the video opens in a new tab and a message shows the manager's error code. Without any manager the same tab fallback is used.
+  - Download icon and *Download Selected* are now enabled for every real link; each row says how it will be downloaded.
+- **Size & duration for both hosts**: tiny Range probe (first 16 KB, plus the 8 KB `moov` tail when needed) goes through `GM_xmlhttpRequest` for another host (no CORS limit), through `fetch` for the same host, each as fallback of the other. If the server ignores Range the body is never pulled (headers only). If the probe cannot read a file the **duration** is read by the browser itself from a detached `<video preload="metadata">` (needs no CORS).
+- **Get size & duration** button in the Download tab (user-started; also runs by itself only when *Video info* is set to Auto). Every video is asked at most once per page.
+- **Live rows**: thumbnail, duration and size are written into the row the moment they become known (no menu re-open). The list also picks up videos the page adds later (also while the script is Off).
+- **Duration and size are always in the row**: chips show `--:--` / `-- MB` until known.
+- **Persistent cache**: thumbnails (small JPEG), durations and sizes are kept in IndexedDB (store `thumbnails`, DB v3, existing data is kept) and restored per video after a reload, without any request.
+- **Unlock & Load All Videos** keeps playback held: after it, the site cannot start a video (`play()`, `autoplay`) until your first tap on the page or 30 s; taps on the Ultra Lite panel do not count.
+
+### Changed
+- **Lock card size is fixed**: 734 x 413 (16:9) from the stylesheet only; independent of the real video, identical after load and re-release. On a screen narrower than 734 px the card shrinks proportionally (same 734:413 ratio).
+- **Thumbnails show the whole picture**: no more centre crop. The stored image keeps the video's real proportions (longest side 240 px); the row shows it with `object-fit: contain` (portrait, 4:3, square, 16:9 all complete). Width adapts to the screen (76-112 px); 16:9 placeholder until a thumbnail exists. Images are not draggable / selectable, so a long-press on Firefox Android does not open the image menu.
+- **Download tab** is now second: Overview, **Download**, Video, Frames, ...
+- **Release** works on any unlocked video, playing or not: it stops it and puts it back behind its card (ended videos restart from the beginning next time). It also cancels a running *Unlock & Load All*.
+- *Unlock & Load All* unlocks only (`preload=auto`, never plays) and is repeatable in any order with Release.
+- Direct links to a video / audio / image opened on its own (for example an `up.shahvani.com` link in a tab) are left alone by the script.
+
+### Fixed (found while reviewing 3.6.0)
+- Release ignored videos that were not paused.
+- Videos opened by *Load All* were never auto-released (no pause time recorded).
+- `fullLoad` could stay set after an early return, making a later normal tap preload everything.
+- A site script could start playback right after *Load All* unlocked a video.
+- *Release* during a running *Load All* left the rest of the run going.
+- Lock cards were sized from the video's geometry / cached ratio, so some cards were very tall.
+- Thumbnails vanished after a reload and appeared only after closing / reopening the menu.
+- Download rows showed duration / size only when the tab was rebuilt.
+
+### Known limitations
+- Thumbnails come only from a poster the page already loaded or a frame already decoded (nothing is requested for them). A cross-origin poster/frame without CORS is shown from memory only (cannot be exported), so it is not restored after a reload.
+- Size of an `up.shahvani.com` video needs `GM_xmlhttpRequest` or a server that allows CORS; without both only the duration is shown (size stays `-- MB`).
+- Playlist (`.m3u8` / `.mpd`) and blob / MediaSource videos have no direct file.
+- Links keep their query token; a time-limited token may expire before a late download.
+- Tampermonkey's own download settings apply to `up.shahvani.com` downloads (Downloads must be enabled and `mp4` whitelisted); otherwise the tab fallback is used.
+- Tested with automated jsdom tests and in desktop Chromium (including phone-size viewports); not in real Firefox.
+
 ## [3.6.0] - 2026-11-22
 
 ### Added

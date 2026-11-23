@@ -1,25 +1,35 @@
 // ==UserScript==
 // @name         Shahvani Ultra Lite
 // @namespace    local.shahvani.ultralite
-// @version      3.6.0
-// @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, native Firefox download), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
+// @version      3.6.1
+// @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
 // @author       parham
 // @homepageURL  https://github.com/parhamghahremani
+// @updateURL    https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/shahvani-ultra-lite.user.js
+// @downloadURL  https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/shahvani-ultra-lite.user.js
 // @match        *://shahvani.com/*
 // @match        *://*.shahvani.com/*
 // @run-at       document-start
-// @grant        none
+// @sandbox      raw
+// @grant        GM_download
+// @grant        GM_xmlhttpRequest
+// @connect      up.shahvani.com
+// @connect      shahvani.com
 // @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2aWV3Qm94PSIwIDAgMTI4IDEyOCIgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiPjxkZWZzPjxyYWRpYWxHcmFkaWVudCBpZD0ib3JiIiBjeD0iMC40IiBjeT0iMC4zIiByPSIwLjk1Ij48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMzYTE0NjYiLz48c3RvcCBvZmZzZXQ9IjAuNTUiIHN0b3AtY29sb3I9IiMxNzBhM2EiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwNjAyMTMiLz48L3JhZGlhbEdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0icmVkIiB4MT0iMC4xNSIgeTE9IjAiIHgyPSIwLjgiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZjdhOTIiLz48c3RvcCBvZmZzZXQ9IjAuNCIgc3RvcC1jb2xvcj0iI2ZmMWY1NSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2IwMDAyZSIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJzaWRlIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjOGEwYTJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNDYwNDFhIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9InJpbmdnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMCI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZmM2IwIi8+PHN0b3Agb2Zmc2V0PSIwLjUiIHN0b3AtY29sb3I9IiNmZmM4M2QiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZjlhMWYiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0iZWRnZSIgeDE9IjAiIHkxPSIwIiB4Mj0iMSIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2ZmN2FiOCIvPjxzdG9wIG9mZnNldD0iMC41IiBzdG9wLWNvbG9yPSIjOGI1Y2Y2Ii8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMjJkM2VlIi8+PC9saW5lYXJHcmFkaWVudD48cmFkaWFsR3JhZGllbnQgaWQ9InNwZWMiIGN4PSIwLjUiIGN5PSIwLjUiIHI9IjAuNSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZmIiBzdG9wLW9wYWNpdHk9IjAuOTUiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZmYiIHN0b3Atb3BhY2l0eT0iMCIvPjwvcmFkaWFsR3JhZGllbnQ+PGZpbHRlciBpZD0iYmx1ciIgeD0iLTMwJSIgeT0iLTMwJSIgd2lkdGg9IjE2MCUiIGhlaWdodD0iMTYwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMy41Ii8+PC9maWx0ZXI+PGZpbHRlciBpZD0iYmx1cjUiIHg9Ii0zMCUiIHk9Ii0zMCUiIHdpZHRoPSIxNjAlIiBoZWlnaHQ9IjE2MCUiPjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjUiLz48L2ZpbHRlcj48ZmlsdGVyIGlkPSJibHVyMTAiIHg9Ii02MCUiIHk9Ii02MCUiIHdpZHRoPSIyMjAlIiBoZWlnaHQ9IjIyMCUiPjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjEwIi8+PC9maWx0ZXI+PGZpbHRlciBpZD0iZ2xvdyIgeD0iLTQwJSIgeT0iLTQwJSIgd2lkdGg9IjE4MCUiIGhlaWdodD0iMTgwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMS44IiByZXN1bHQ9ImIiLz48ZmVNZXJnZT48ZmVNZXJnZU5vZGUgaW49ImIiLz48ZmVNZXJnZU5vZGUgaW49IlNvdXJjZUdyYXBoaWMiLz48L2ZlTWVyZ2U+PC9maWx0ZXI+PGNsaXBQYXRoIGlkPSJvY2xpcCI+PGNpcmNsZSBjeD0iNjQiIGN5PSI2NCIgcj0iNTYiLz48L2NsaXBQYXRoPjxwYXRoIGlkPSJoZWFydCIgZD0iTTY0IDExNiBDMTYgODQgNiA1NCA2IDM4IEM2IDIyIDE4IDEwIDM0IDEwIEM0NyAxMCA1OCAxNyA2NCAyOSBDNzAgMTcgODEgMTAgOTQgMTAgQzExMCAxMCAxMjIgMjIgMTIyIDM4IEMxMjIgNTQgMTEyIDg0IDY0IDExNiBaIi8+PGNsaXBQYXRoIGlkPSJoY2xpcCI+PHVzZSB4bGluazpocmVmPSIjaGVhcnQiIGhyZWY9IiNoZWFydCIvPjwvY2xpcFBhdGg+PHBhdGggaWQ9InN0YXIiIGQ9Ik0wIC02IEwxLjYgLTEuNiBMNiAwIEwxLjYgMS42IEwwIDYgTC0xLjYgMS42IEwtNiAwIEwtMS42IC0xLjYgWiIvPjxwYXRoIGlkPSJtaW5pIiBkPSJNMCA2IEMtOSAtMSAtNiAtNyAwIC0zIEM2IC03IDkgLTEgMCA2IFoiLz48ZyBpZD0iZ3NoIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik01MiA2MiBDNDcgNTQgMjYgNTQgMjYgNjUgQzI2IDc2IDUyIDcyIDUyIDgzIEM1MiA5NCAzMCA5NCAyNCA4NiIvPjxwYXRoIGQ9Ik02OCAzMCBWOTIiLz48cGF0aCBkPSJNNjggNzIgQzY4IDYwIDc3IDU1IDg1IDU1IEM5NCA1NSAxMDAgNjEgMTAwIDcxIFY5MiIvPjwvZz48L2RlZnM+PGVsbGlwc2UgY3g9IjY0IiBjeT0iMTIzIiByeD0iMzQiIHJ5PSI0IiBmaWxsPSIjMDAwIiBvcGFjaXR5PSIwLjU1IiBmaWx0ZXI9InVybCgjYmx1cikiLz48Y2lyY2xlIGN4PSI2NCIgY3k9IjY0IiByPSI1NiIgZmlsbD0idXJsKCNvcmIpIi8+PGcgY2xpcC1wYXRoPSJ1cmwoI29jbGlwKSI+PGNpcmNsZSBjeD0iMjYiIGN5PSIyOCIgcj0iMzIiIGZpbGw9IiNjMDI2ZDMiIG9wYWNpdHk9IjAuNDUiIGZpbHRlcj0idXJsKCNibHVyMTApIi8+PGNpcmNsZSBjeD0iMTA2IiBjeT0iMTAyIiByPSIzNCIgZmlsbD0iIzI1NjNlYiIgb3BhY2l0eT0iMC41IiBmaWx0ZXI9InVybCgjYmx1cjEwKSIvPjxjaXJjbGUgY3g9IjEwMCIgY3k9IjI0IiByPSIyMiIgZmlsbD0iI2ZmMmQ3NSIgb3BhY2l0eT0iMC4zMCIgZmlsdGVyPSJ1cmwoI2JsdXIxMCkiLz48ZyBmaWxsPSIjZmZmIj48Y2lyY2xlIGN4PSIyMCIgY3k9IjUwIiByPSIxLjIiIG9wYWNpdHk9IjAuOSIvPjxjaXJjbGUgY3g9IjM0IiBjeT0iMTYiIHI9IjEiIG9wYWNpdHk9IjAuOCIvPjxjaXJjbGUgY3g9IjUyIiBjeT0iMTAiIHI9IjAuOSIgb3BhY2l0eT0iMC43Ii8+PGNpcmNsZSBjeD0iODYiIGN5PSIxMiIgcj0iMS4yIiBvcGFjaXR5PSIwLjkiLz48Y2lyY2xlIGN4PSIxMTIiIGN5PSI0MCIgcj0iMSIgb3BhY2l0eT0iMC44Ii8+PGNpcmNsZSBjeD0iMTE2IiBjeT0iNzAiIHI9IjEuMyIgb3BhY2l0eT0iMC43Ii8+PGNpcmNsZSBjeD0iMTIiIGN5PSI4MiIgcj0iMSIgb3BhY2l0eT0iMC43Ii8+PGNpcmNsZSBjeD0iMzAiIGN5PSIxMDgiIHI9IjEuMiIgb3BhY2l0eT0iMC44Ii8+PGNpcmNsZSBjeD0iNjQiIGN5PSIxMTgiIHI9IjAuOSIgb3BhY2l0eT0iMC42Ii8+PGNpcmNsZSBjeD0iOTYiIGN5PSIxMTIiIHI9IjEiIG9wYWNpdHk9IjAuOCIvPjxjaXJjbGUgY3g9IjQ0IiBjeT0iMTEyIiByPSIwLjgiIG9wYWNpdHk9IjAuNiIvPjxjaXJjbGUgY3g9IjEwOCIgY3k9IjE2IiByPSIwLjkiIG9wYWNpdHk9IjAuNyIvPjwvZz48L2c+PGNpcmNsZSBjeD0iNjQiIGN5PSI2NCIgcj0iNTUiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNlZGdlKSIgc3Ryb2tlLXdpZHRoPSIyLjQiLz48ZyB0cmFuc2Zvcm09InJvdGF0ZSgtMTggNjQgNjYpIj48cGF0aCBkPSJNMTIgNjYgQTUyIDE0IDAgMCAxIDExNiA2NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3JpbmdnKSIgc3Ryb2tlLXdpZHRoPSIyLjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iMC41NSIvPjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2NCA2Mykgc2NhbGUoMC43KSB0cmFuc2xhdGUoLTY0IC02MykiPjx1c2UgeGxpbms6aHJlZj0iI2hlYXJ0IiBocmVmPSIjaGVhcnQiIGZpbGw9IiNmZjFmNTUiIG9wYWNpdHk9IjAuODUiIGZpbHRlcj0idXJsKCNibHVyMTApIi8+PHVzZSB4bGluazpocmVmPSIjaGVhcnQiIGhyZWY9IiNoZWFydCIgZmlsbD0idXJsKCNzaWRlKSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCA2KSIvPjx1c2UgeGxpbms6aHJlZj0iI2hlYXJ0IiBocmVmPSIjaGVhcnQiIGZpbGw9InVybCgjcmVkKSIvPjxnIGNsaXAtcGF0aD0idXJsKCNoY2xpcCkiPjx1c2UgeGxpbms6aHJlZj0iI2hlYXJ0IiBocmVmPSIjaGVhcnQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzZhMDcyMCIgc3Ryb2tlLXdpZHRoPSIxMiIgb3BhY2l0eT0iMC41IiBmaWx0ZXI9InVybCgjYmx1cjUpIi8+PGVsbGlwc2UgY3g9IjMwIiBjeT0iMzAiIHJ4PSIyNCIgcnk9IjE0IiBmaWxsPSJ1cmwoI3NwZWMpIi8+PGVsbGlwc2UgY3g9Ijk4IiBjeT0iMjQiIHJ4PSIxMCIgcnk9IjYiIGZpbGw9InVybCgjc3BlYykiIG9wYWNpdHk9IjAuNiIgdHJhbnNmb3JtPSJyb3RhdGUoLTI1IDk4IDI0KSIvPjwvZz48dXNlIHhsaW5rOmhyZWY9IiNoZWFydCIgaHJlZj0iI2hlYXJ0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS1vcGFjaXR5PSIwLjc1IiBzdHJva2Utd2lkdGg9IjIuMiIvPjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2NCA1Nykgc2NhbGUoMC41NSkgdHJhbnNsYXRlKC02MiAtNjEpIj48ZyBzdHJva2U9IiM1YTA1MTgiIHN0cm9rZS13aWR0aD0iMTUiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAgOCkiPjx1c2UgeGxpbms6aHJlZj0iI2dzaCIgaHJlZj0iI2dzaCIvPjwvZz48ZyBzdHJva2U9IiNhMzQ4MGEiIHN0cm9rZS13aWR0aD0iMTQiPjx1c2UgeGxpbms6aHJlZj0iI2dzaCIgaHJlZj0iI2dzaCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCA2KSIvPjx1c2UgeGxpbms6aHJlZj0iI2dzaCIgaHJlZj0iI2dzaCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCA0LjUpIi8+PHVzZSB4bGluazpocmVmPSIjZ3NoIiBocmVmPSIjZ3NoIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwIDMpIi8+PHVzZSB4bGluazpocmVmPSIjZ3NoIiBocmVmPSIjZ3NoIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwIDEuNSkiLz48L2c+PHVzZSB4bGluazpocmVmPSIjZ3NoIiBocmVmPSIjZ3NoIiBzdHJva2U9IiNmZmQ0NWEiIHN0cm9rZS13aWR0aD0iMTMiLz48L2c+PGcgdHJhbnNmb3JtPSJyb3RhdGUoLTE4IDY0IDY2KSI+PHBhdGggZD0iTTEyIDY2IEE1MiAxNCAwIDAgMCAxMTYgNjYiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNyaW5nZykiIHN0cm9rZS13aWR0aD0iMi42IiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNnbG93KSIvPjxjaXJjbGUgY3g9IjEwNCIgY3k9Ijc1IiByPSIzLjQiIGZpbGw9IiNmZmZiZTAiIGZpbHRlcj0idXJsKCNnbG93KSIvPjxjaXJjbGUgY3g9IjI0IiBjeT0iNzIiIHI9IjIiIGZpbGw9IiNmZmQ0NWEiIGZpbHRlcj0idXJsKCNnbG93KSIvPjwvZz48dXNlIHhsaW5rOmhyZWY9IiNzdGFyIiBocmVmPSIjc3RhciIgZmlsbD0iI2ZmZiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoOTggMjgpIHNjYWxlKDEuNCkiLz48dXNlIHhsaW5rOmhyZWY9IiNzdGFyIiBocmVmPSIjc3RhciIgZmlsbD0iI2ZmZTA4YSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjggMzYpIHNjYWxlKDEpIi8+PHVzZSB4bGluazpocmVmPSIjc3RhciIgaHJlZj0iI3N0YXIiIGZpbGw9IiNmZmYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDk0IDEwNCkgc2NhbGUoMC45KSIvPjx1c2UgeGxpbms6aHJlZj0iI21pbmkiIGhyZWY9IiNtaW5pIiBmaWxsPSIjZmY3YTlhIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMC43IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzMCA5Nikgcm90YXRlKC0xNSkiLz48dXNlIHhsaW5rOmhyZWY9IiNtaW5pIiBocmVmPSIjbWluaSIgZmlsbD0iI2ZmZDFkYyIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjAuNyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTA4IDU2KSByb3RhdGUoMTUpIHNjYWxlKDAuOCkiLz48L3N2Zz4=
 // ==/UserScript==
 
 (() => {
   'use strict';
 
-  const VERSION = '3.6.0';
+  const VERSION = '3.6.1';
+
+  // v3.6.1: a video / audio / image opened on its own (e.g. a direct up.shahvani.com link in a tab) is the browser's own
+  // viewer, not a page: nothing to lock, nothing to patch.
+  try { if (/^(video|audio|image)\//i.test(document.contentType || '')) return; } catch (_) {}
   const KEY = 'shvUltraLite.settings.v3';
   const LEGACY_KEYS = ['shvUltraLite.settings.v2'];
   const IDB_NAME = 'shvUltraLiteDB';
-  const IDB_VERSION = 2; // v3.5.3: v2 adds the videoMetadata store for databases created by older versions
+  const IDB_VERSION = 3; // v3.5.3: v2 adds the videoMetadata store; v3.6.1: v3 adds the thumbnails store
   const SITE = 'shahvani.com';
   const MEDIA_DELAY_MS = 60;
   const VISUAL_BATCH_MS = 160;
@@ -30,6 +40,9 @@
   const MAX_ID_LENGTH = 200;
   const PLACEHOLDER_MIN_HEIGHT = 140;
   const PLACEHOLDER_MAX_HEIGHT = 320;
+  // v3.6.1: every video lock card has exactly this size, whatever the real video measures: 733.97 x 412.85 -> 734 x 413 (16:9)
+  const CARD_W = 734;
+  const CARD_H = 413;
   const ASPECT_RATIO_MIN = 0.4;
   const ASPECT_RATIO_MAX = 3.5;
   const ASPECT_RATIO_DEFAULT = 16 / 9;
@@ -315,6 +328,11 @@
             store.createIndex('videoSrc', 'videoSrc', { unique: false });
             store.createIndex('timestamp', 'timestamp', { unique: false });
           }
+          // v3.6.1: persistent thumbnails of the Download tab (small JPEG data URLs, 30 days)
+          if (!db.objectStoreNames.contains('thumbnails')) {
+            const store = db.createObjectStore('thumbnails', { keyPath: 'id' });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+          }
         };
       } catch (_) {
         reject(new Error('IndexedDB not available'));
@@ -499,6 +517,92 @@
     }).catch(() => {});
   }
 
+  /* ---- v3.6.1: thumbnail + video-info cache helpers for the Download tab (local only, no network) ---- */
+
+  const THUMB_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+  const THUMB_DB_MAX = 400;
+
+  /** Keeps a stored poster thumbnail: a later frame-based one never replaces it. */
+  function idbSaveThumb(key, url, kind) {
+    if (!key || !url) return;
+    idbInit().then(db => {
+      if (!db.objectStoreNames.contains('thumbnails')) return;
+      const tx = db.transaction('thumbnails', 'readwrite');
+      const store = tx.objectStore('thumbnails');
+      const req = store.get(key);
+      req.onsuccess = () => {
+        const old = req.result;
+        if (old && old.kind === 'poster' && kind !== 'poster') return;
+        store.put({ id: key, url, kind, timestamp: Date.now() });
+      };
+    }).catch(() => {});
+  }
+
+  /** @returns {Promise<Map<string, {url: string, kind: string}>>} the thumbnails found for `keys` (fresh ones only). */
+  function idbGetThumbs(keys) {
+    return idbInit().then(db => new Promise(resolve => {
+      const out = new Map();
+      if (!keys.length || !db.objectStoreNames.contains('thumbnails')) { resolve(out); return; }
+      const tx = db.transaction('thumbnails', 'readonly');
+      const store = tx.objectStore('thumbnails');
+      const limit = Date.now() - THUMB_TTL_MS;
+      for (const key of keys) {
+        const req = store.get(key);
+        req.onsuccess = () => {
+          const r = req.result;
+          if (r && typeof r.url === 'string' && r.timestamp > limit) out.set(key, { url: r.url, kind: r.kind === 'poster' ? 'poster' : 'frame' });
+        };
+      }
+      tx.oncomplete = () => resolve(out);
+      tx.onerror = tx.onabort = () => resolve(out);
+    })).catch(() => new Map());
+  }
+
+  /** @returns {Promise<Map<string, {duration: number, size: number}>>} cached duration / size (videoMetadata store, 7 days). */
+  function idbGetVideoMetaMany(keys) {
+    return idbInit().then(db => new Promise(resolve => {
+      const out = new Map();
+      if (!keys.length || !db.objectStoreNames.contains('videoMetadata')) { resolve(out); return; }
+      const tx = db.transaction('videoMetadata', 'readonly');
+      const store = tx.objectStore('videoMetadata');
+      const limit = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      for (const key of keys) {
+        const req = store.get('videoMeta_' + key);
+        req.onsuccess = () => {
+          const r = req.result;
+          if (r && r.timestamp > limit && (r.duration > 0 || r.size > 0)) out.set(key, { duration: r.duration || 0, size: r.size || 0 });
+        };
+      }
+      tx.oncomplete = () => resolve(out);
+      tx.onerror = tx.onabort = () => resolve(out);
+    })).catch(() => new Map());
+  }
+
+  /** Drops expired thumbnails and keeps the store under THUMB_DB_MAX (oldest first). Runs once, a few seconds after start. */
+  function idbPruneThumbs() {
+    idbInit().then(db => {
+      if (!db.objectStoreNames.contains('thumbnails')) return;
+      const tx = db.transaction('thumbnails', 'readwrite');
+      const store = tx.objectStore('thumbnails');
+      const index = store.index('timestamp');
+      const old = index.openCursor(IDBKeyRange.upperBound(Date.now() - THUMB_TTL_MS));
+      old.onsuccess = () => { const c = old.result; if (c) { c.delete(); c.continue(); } };
+      tx.oncomplete = () => {
+        idbInit().then(db2 => {
+          const tx2 = db2.transaction('thumbnails', 'readwrite');
+          const store2 = tx2.objectStore('thumbnails');
+          const countReq = store2.count();
+          countReq.onsuccess = () => {
+            let extra = countReq.result - THUMB_DB_MAX;
+            if (extra <= 0) return;
+            const cur = store2.index('timestamp').openCursor();
+            cur.onsuccess = () => { const c = cur.result; if (c && extra-- > 0) { c.delete(); c.continue(); } };
+          };
+        }).catch(() => {});
+      };
+    }).catch(() => {});
+  }
+
   /* ======================================================================
    * 2. Translations (v3.1.0 i18n + v6.0.0 comprehensive keys)
    * ==================================================================== */
@@ -663,7 +767,7 @@
       stEmergencyBlocked: 'Emergency lock is on. Turn it off first.',
       stAdBlocked: 'This frame is a filtered known ad. Turn the ad filter off in Ads.',
       stPaused: 'Paused {n} item(s). Players inside external frames cannot be controlled.',
-      stNoRelease: 'Nothing to release. Playing videos and visible frames stay untouched.',
+      stNoRelease: 'Nothing to release. Locked videos and visible frames stay as they are.',
       stReleased: 'Released. Videos: {v}, frames: {f}.',
       stAutoReleased: 'Auto-released {n} idle video(s).',
 
@@ -714,17 +818,20 @@
       dlCopy: 'Copy Selected Links ({n})',
       dlConfirm: 'Send {n} downloads? Tap again',
       dlEmpty: 'No videos found on this page.',
-      dlNote: 'Downloads go to the Firefox download manager. Only videos from this same site can be downloaded here; for any other link use Copy. Nothing is downloaded until you tap.',
+      dlNote: 'Videos of shahvani.com go to the Firefox download manager; videos of up.shahvani.com are downloaded through Tampermonkey. Nothing is downloaded until you tap. Size and duration appear as soon as they are known; Get size & duration asks the server for the first few KB of each video (the video itself is not downloaded).',
       dlOffPage: 'Not on this page',
       dlStream: 'Stream playlist: no direct file',
       dlNoLink: 'No usable link',
-      dlNoDirect: 'Other site: copy the link instead',
+      dlNoDirect: 'Other site: opens in a new tab (save it from there) or use Copy',
+      dlViaTm: 'Other site: downloaded through Tampermonkey',
+      stDlGmFailed: 'Tampermonkey could not download it ({err}). Opened in a new tab instead. Check Tampermonkey > Settings > Downloads.',
+      stDlSentTabs: 'Started {n} download(s); {t} opened in a new tab (no Tampermonkey download). Skipped: {m}.',
       dlTipSelect: 'Select this video',
       dlTipDownload: 'Download this video',
       dlTipCopy: 'Copy this video link',
       stDlNone: 'Nothing selected.',
       stDlSending: 'Sending downloads: {i} of {n}',
-      stDlSent: 'Sent {n} download(s) to Firefox. Skipped: {m}.',
+      stDlSent: 'Started {n} download(s). Skipped: {m}.',
       stDlUnavailable: 'None of these can be downloaded here ({m}). Use Copy link.',
       stDlBusy: 'Downloads are still being sent.',
       stDlLimit: 'Selection limit reached ({n}).',
@@ -737,6 +844,15 @@
       stNoLocked: 'No locked videos to load.',
       stLoadAllStart: 'Loading {n} video(s)...',
       stLoadAllDone: 'Unlocked and started loading {n} video(s).',
+      dlChipDuration: 'Duration',
+      dlChipSize: 'File size',
+      dlGetInfo: 'Get size & duration ({n})',
+      dlGetInfoConfirm: 'Check {n} videos? The first few KB of each file are requested. Tap again',
+      stDlInfoNone: 'Nothing to check: size and duration are known, or there is no link.',
+      stDlInfoBusy: 'Still fetching size and duration.',
+      stDlInfoStart: 'Fetching size and duration of {n} video(s)...',
+      stDlInfoDone: 'Got information for {n} of {m} video(s).',
+      stLoadAllBusy: 'Unlock & Load is still running.',
       filteredAds: 'Filtered Ads'
     },
     fa: {
@@ -898,7 +1014,7 @@
       stEmergencyBlocked: 'قفل اضطراری روشن است. ابتدا خاموشش کنید.',
       stAdBlocked: 'این فریم یک تبلیغ شناخته‌شده و فیلتر شده است. فیلتر را در بخش تبلیغات خاموش کنید.',
       stPaused: '{n} مورد مکث شد. پلیرهای داخل فریم‌های خارجی قابل کنترل نیستند.',
-      stNoRelease: 'موردی برای آزادسازی نیست. ویدیوهای در حال پخش و فریم‌های قابل‌مشاهده دست‌نخورده می‌مانند.',
+      stNoRelease: 'موردی برای آزادسازی نیست. ویدیوهای قفل و فریم‌های قابل‌مشاهده بدون تغییر می‌مانند.',
       stReleased: 'آزادسازی شد. ویدیو: {v}، فریم: {f}.',
       stAutoReleased: '{n} ویدیوی بی‌کار خودکار آزاد شد.',
       stReset: 'تنظیمات بازنشانی شد.',
@@ -948,17 +1064,20 @@
       dlCopy: 'کپی لینک انتخاب‌شده‌ها ({n})',
       dlConfirm: 'ارسال {n} دانلود؟ دوباره لمس کنید',
       dlEmpty: 'ویدیویی در این صفحه پیدا نشد.',
-      dlNote: 'دانلودها به مدیر دانلود Firefox می‌روند. اینجا فقط ویدیوهای همین سایت دانلود می‌شوند؛ برای هر لینک دیگر از کپی استفاده کنید. تا لمس نکنید چیزی دانلود نمی‌شود.',
+      dlNote: 'ویدیوهای shahvani.com به مدیر دانلود Firefox می‌روند و ویدیوهای up.shahvani.com با دانلود Tampermonkey دانلود می‌شوند. تا لمس نکنید چیزی دانلود نمی‌شود. حجم و مدت به‌محض مشخص شدن نشان داده می‌شوند؛ دکمه‌ی دریافت حجم و مدت فقط چند کیلوبایت اول هر ویدیو را از سرور می‌گیرد (خود ویدیو دانلود نمی‌شود).',
       dlOffPage: 'در این صفحه نیست',
       dlStream: 'پلی‌لیست استریم: فایل مستقیم ندارد',
       dlNoLink: 'لینک قابل‌استفاده ندارد',
-      dlNoDirect: 'سایت دیگر: لینک را کپی کنید',
+      dlNoDirect: 'سایت دیگر: در تب جدید باز می‌شود (از آنجا ذخیره کنید) یا کپی کنید',
+      dlViaTm: 'سایت دیگر: با دانلود Tampermonkey دانلود می‌شود',
+      stDlGmFailed: 'Tampermonkey نتوانست دانلود کند ({err}). به‌جای آن در تب جدید باز شد. تنظیمات Tampermonkey > Settings > Downloads را بررسی کنید.',
+      stDlSentTabs: '{n} دانلود شروع شد؛ {t} مورد در تب جدید باز شد (دانلود Tampermonkey در دسترس نیست). ردشده: {m}.',
       dlTipSelect: 'انتخاب این ویدیو',
       dlTipDownload: 'دانلود این ویدیو',
       dlTipCopy: 'کپی لینک این ویدیو',
       stDlNone: 'چیزی انتخاب نشده.',
       stDlSending: 'در حال ارسال دانلودها: {i} از {n}',
-      stDlSent: '{n} دانلود به Firefox فرستاده شد. ردشده: {m}.',
+      stDlSent: '{n} دانلود شروع شد. ردشده: {m}.',
       stDlUnavailable: 'هیچ‌کدام اینجا قابل دانلود نیستند ({m}). از کپی لینک استفاده کنید.',
       stDlBusy: 'ارسال دانلودها هنوز ادامه دارد.',
       stDlLimit: 'به سقف انتخاب رسیدید ({n}).',
@@ -971,6 +1090,15 @@
       stNoLocked: 'ویدیوی قفلی برای بارگذاری نیست.',
       stLoadAllStart: 'در حال بارگذاری {n} ویدیو...',
       stLoadAllDone: '{n} ویدیو باز شد و بارگذاری آغاز شد.',
+      dlChipDuration: 'مدت زمان',
+      dlChipSize: 'حجم فایل',
+      dlGetInfo: 'دریافت حجم و مدت ({n})',
+      dlGetInfoConfirm: 'بررسی {n} ویدیو؟ برای هر فایل فقط چند کیلوبایت اول درخواست می‌شود. دوباره لمس کنید',
+      stDlInfoNone: 'موردی برای بررسی نیست: حجم و مدت مشخص است یا لینک ندارد.',
+      stDlInfoBusy: 'دریافت حجم و مدت هنوز ادامه دارد.',
+      stDlInfoStart: 'در حال دریافت حجم و مدت {n} ویدیو...',
+      stDlInfoDone: 'اطلاعات {n} ویدیو از {m} ویدیو دریافت شد.',
+      stLoadAllBusy: 'بارگذاری هنوز ادامه دارد.',
       filteredAds: 'تبلیغات فیلترشده',
     }
   };
@@ -1001,6 +1129,7 @@
     cleanupTimer: 0,
     uiTimer: 0,
     lastGesture: 0,
+    lastPageGesture: 0,   // v3.6.1: last tap / key on the PAGE (taps on our own panel do not count)
     status: { key: 'stReady', vars: null },
     activeTab: 'home',
     open: false,
@@ -1035,6 +1164,32 @@
     fetch: typeof window.fetch === 'function' ? window.fetch.bind(window) : null,
     setAttribute: Element.prototype.setAttribute
   };
+
+  /**
+   * v3.6.1: Tampermonkey helpers for the second upload host (up.shahvani.com). The script still runs in the page
+   * context (@sandbox raw), so everything else is unchanged. Both are OPTIONAL: when the manager does not provide
+   * them (other managers, grants refused) every path below falls back to something that needs no grant.
+   */
+  const GM_FN = {
+    download: (() => {
+      try {
+        if (typeof GM_download === 'function') return GM_download;
+        if (typeof GM !== 'undefined' && GM && typeof GM.download === 'function') return d => GM.download(d);
+      } catch (_) {}
+      return null;
+    })(),
+    request: (() => {
+      try {
+        if (typeof GM_xmlhttpRequest === 'function') return GM_xmlhttpRequest;
+        if (typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function') return d => GM.xmlHttpRequest(d);
+      } catch (_) {}
+      return null;
+    })()
+  };
+
+  function isCrossOrigin(url) {
+    try { return new URL(url, document.baseURI).origin !== location.origin; } catch (_) { return false; }
+  }
 
   function setStatus(key, vars, withToast) {
     state.status = { key, vars: vars || null };
@@ -1135,7 +1290,15 @@
       outline-offset: 3px !important;
     }
 
-    .shv-video-placeholder { aspect-ratio: ${ASPECT_RATIO_DEFAULT} !important; }
+    /* v3.6.1: fixed lock-card size. On a screen narrower than ${CARD_W}px the card shrinks with the SAME ratio. */
+    .shv-video-placeholder {
+      width: min(100%, ${CARD_W}px) !important;
+      max-width: 100% !important;
+      height: auto !important;
+      min-height: 0 !important;
+      aspect-ratio: ${CARD_W} / ${CARD_H} !important;
+      margin-inline: auto !important;
+    }
     .shv-audio-placeholder { aspect-ratio: auto !important; min-height: 64px !important; flex-direction: row !important; padding: 10px 14px !important; }
 
     .shv-media-placeholder .shv-placeholder-icon {
@@ -1539,7 +1702,7 @@
       button.classList.add('shv-inverted-neumorphic');
     }
 
-    if (!entry.audio) {
+    if (!entry.audio && entry.kind !== 'video') {   // v3.6.1: video cards get their size from the stylesheet only
       const ratio = Number.isFinite(entry.aspectRatio) ? entry.aspectRatio : ASPECT_RATIO_DEFAULT;
       // v3.5.5: must be !important - the stylesheet rules above are !important too and would beat a plain inline value.
       button.style.setProperty('aspect-ratio', String(ratio), 'important');
@@ -1724,6 +1887,8 @@
       probeState: '',       // '' | queued | running | done | failed
       probed: false,        // a probe (or cached probe) already ran for this video
       inView: false,
+      holdUntil: 0,         // v3.6.1: after "Unlock & Load All" playback is held until the user touches the page
+      unlockedAt: 0,
       fullLoad: false,      // v3.6.0: set by "Unlock & Load All": restore with preload=auto
       ...videoGeometry(video)
     };
@@ -1961,8 +2126,75 @@
     return out.subarray(0, n);
   }
 
-  /** One Range request. total = full file size (Content-Range, or Content-Length if Range was ignored). */
-  async function probeRange(url, start, length, signal) {
+  /** Raw response header value from GM_xmlhttpRequest's header string. */
+  function rawHeader(raw, name) {
+    const m = new RegExp('^' + name + ':[ \\t]*(.+)$', 'im').exec(raw || '');
+    return m ? m[1].trim() : '';
+  }
+
+  /**
+   * One Range request through the manager (not limited by CORS): needed for up.shahvani.com, whose answers the
+   * page's own fetch may not read. If the server ignores Range the body is NOT pulled: only the headers are used.
+   */
+  function gmRange(url, start, length, signal) {
+    return new Promise((resolve, reject) => {
+      let req = null;
+      let settled = false;
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        if (signal) signal.removeEventListener('abort', onAbort);
+        fn(value);
+      };
+      const cancel = () => { try { if (req && typeof req.abort === 'function') req.abort(); } catch (_) {} };
+      const onAbort = () => { cancel(); finish(reject, new DOMException('Aborted', 'AbortError')); };
+      if (signal) {
+        if (signal.aborted) { onAbort(); return; }
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+      const info = r => {
+        const contentRange = rawHeader(r.responseHeaders, 'content-range');
+        const contentLength = parseInt(rawHeader(r.responseHeaders, 'content-length') || '0', 10);
+        let total = 0;
+        const m = /\/(\d+)\s*$/.exec(contentRange);
+        if (m) total = parseInt(m[1], 10);
+        else if (r.status === 200 && contentLength > 0) total = contentLength;
+        return { total, type: rawHeader(r.responseHeaders, 'content-type').toLowerCase() };
+      };
+      try {
+        req = GM_FN.request({
+          method: 'GET',
+          url,
+          headers: { Range: 'bytes=' + start + '-' + (start + length - 1) },
+          responseType: 'arraybuffer',
+          timeout: PROBE_TIMEOUT_MS,
+          onreadystatechange: r => {
+            if (settled || r.readyState !== 2 || r.status !== 200) return;
+            const head = info(r);                              // Range ignored: keep the headers, drop the body
+            cancel();
+            finish(resolve, { bytes: new Uint8Array(0), total: head.total, partial: false, type: head.type });
+          },
+          onload: r => {
+            if (r.status === 416) { finish(resolve, { bytes: new Uint8Array(0), total: info(r).total, partial: false, type: '' }); return; }
+            if (r.status < 200 || r.status >= 300) { finish(reject, new Error('HTTP ' + r.status)); return; }
+            const head = info(r);
+            let bytes = new Uint8Array(0);
+            if (r.response && typeof r.response.byteLength === 'number') bytes = new Uint8Array(r.response).subarray(0, length);
+            state.probeBytes += bytes.length;
+            finish(resolve, { bytes, total: head.total, partial: r.status === 206, type: head.type });
+          },
+          onerror: () => finish(reject, new Error('request failed')),
+          ontimeout: () => finish(reject, new Error('timeout')),
+          onabort: () => finish(reject, new DOMException('Aborted', 'AbortError'))
+        });
+      } catch (err) {
+        finish(reject, err);
+      }
+    });
+  }
+
+  async function fetchRange(url, start, length, signal) {
+    if (!NATIVE.fetch) throw new Error('no fetch');
     const res = await NATIVE.fetch(url, {
       method: 'GET',
       headers: { Range: 'bytes=' + start + '-' + (start + length - 1) },
@@ -1985,6 +2217,54 @@
     }
     const bytes = await readCapped(res, length);
     return { bytes, total, partial: res.status === 206, type: (res.headers.get('content-type') || '').toLowerCase() };
+  }
+
+  /**
+   * One Range request. total = full file size (Content-Range, or Content-Length if Range was ignored).
+   * v3.6.1: another origin (up.shahvani.com) goes through the manager first (no CORS limits), the page's fetch is the
+   * fallback; the same origin uses fetch first, the manager is the fallback when the browser refuses the answer.
+   */
+  async function probeRange(url, start, length, signal) {
+    const order = GM_FN.request ? (isCrossOrigin(url) ? [gmRange, fetchRange] : [fetchRange, gmRange]) : [fetchRange];
+    let lastError = null;
+    for (const attempt of order) {
+      try {
+        return await attempt(url, start, length, signal);
+      } catch (err) {
+        if (err && err.name === 'AbortError') throw err;
+        lastError = err;
+      }
+    }
+    throw lastError || new Error('probe failed');
+  }
+
+  /**
+   * Duration straight from the browser's own demuxer: a detached <video preload="metadata"> reads only the header
+   * of the file and needs no CORS permission. Last resort when the Range probe cannot read (or understand) a video.
+   * @returns {Promise<number>} seconds, 0 if unknown
+   */
+  function elementDuration(url) {
+    return new Promise(resolve => {
+      let video = null;
+      let done = false;
+      let timer = 0;
+      const finish = value => {
+        if (done) return;
+        done = true;
+        window.clearTimeout(timer);
+        try { video.removeAttribute('src'); NATIVE.load.call(video); } catch (_) {}
+        resolve(Number.isFinite(value) && value > 0 && value < 1e6 ? value : 0);
+      };
+      try {
+        video = document.createElement('video');
+        video.preload = 'metadata';
+        video.muted = true;
+        video.addEventListener('loadedmetadata', () => finish(video.duration), { once: true });
+        video.addEventListener('error', () => finish(0), { once: true });
+        timer = window.setTimeout(() => finish(video.duration), 12000);
+        video.src = url;
+      } catch (_) { finish(0); }
+    });
   }
 
   /** Size + duration of one video URL with at most two small Range requests. */
@@ -2042,10 +2322,7 @@
         entry.videoDuration = cached.duration || entry.videoDuration;
         entry.videoSize = cached.size || entry.videoSize;
         if (cached.probed) entry.probed = true;
-        if (cached.aspectRatio) {
-          entry.aspectRatio = cached.aspectRatio;
-          if (entry.placeholder) entry.placeholder.style.setProperty('aspect-ratio', String(entry.aspectRatio), 'important');
-        }
+        if (cached.aspectRatio) entry.aspectRatio = cached.aspectRatio;   // v3.6.1: data only, the card size is fixed
         updatePlaceholderInfo(entry);
       }
       probeConsider(entry);
@@ -2160,6 +2437,7 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) probePump(); });
 
   function updatePlaceholderInfo(entry) {
+    dlInfoChanged(entry);   // v3.6.1: keep the open Download tab in sync (size / duration just became known)
     if (!entry.placeholder || !entry.placeholder.isConnected) return;
 
     // Size badge (bottom-left)
@@ -2363,6 +2641,7 @@
     entry.loaded = true;
     entry.released = false;
     entry.pausedAt = 0;
+    entry.holdUntil = 0;
 
     if (state.probeObserver && entry.placeholder) { try { state.probeObserver.unobserve(entry.placeholder); } catch (_) {} }
     if (entry.placeholder && entry.placeholder.isConnected) entry.placeholder.remove();
@@ -2597,19 +2876,41 @@
     return isUsableURL(entry.videoSrc) || entry.sources.some(item => isUsableURL(item.src));
   }
 
-  function releaseVideoEntry(entry) {
+  /**
+   * Re-lock a loaded video and free its resource. Without `force` (auto-release) only a paused, unfinished video
+   * qualifies. With `force` (the Release button, v3.6.1) a playing video is stopped first, so Release works
+   * whatever the state of the video is.
+   */
+  function releaseVideoEntry(entry, force) {
     const video = entry.element;
-    if (!video || !entry.loaded || !video.paused || video.ended || !snapshotVideoSources(entry)) return false;
+    if (!video || !entry.loaded || !snapshotVideoSources(entry)) return false;
+    if (!force && (!video.paused || video.ended)) return false;
 
+    if (force) {
+      // do not leave a hidden element in Picture-in-Picture / fullscreen
+      try { if (document.pictureInPictureElement === video) document.exitPictureInPicture().catch(() => {}); } catch (_) {}
+      try {
+        const fs = document.fullscreenElement;
+        if (fs && (fs === video || fs.contains(video))) document.exitFullscreen().catch(() => {});
+      } catch (_) {}
+      safePause(video);
+    }
+
+    // a thumbnail of what the user was looking at (frame already decoded: no network)
+    captureFrame(entry);
+
+    const finished = !!video.ended;
     try {
-      entry.resumeTime = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+      entry.resumeTime = !finished && Number.isFinite(video.currentTime) ? video.currentTime : 0;
     } catch (_) {
       entry.resumeTime = 0;
     }
 
-    // v3.3.0: Save resume position to IndexedDB
+    // v3.3.0: Save resume position to IndexedDB (a finished video starts over next time)
     if (settings.resumePosition && entry.resumeTime > 0) {
       idbSaveResumePosition(entry.videoSrc || video.currentSrc, location.href, entry.resumeTime, video.duration);
+    } else if (finished && entry.videoSrc) {
+      idbDeleteResumePosition(entry.videoSrc);
     }
 
     // v3.5.1: Save metadata to cache before releasing
@@ -2617,6 +2918,8 @@
 
     entry.loaded = false;
     entry.released = true;
+    entry.holdUntil = 0;
+    entry.pausedAt = 0;
     video.classList.add('shv-suspended-video');
     insertPlaceholder(entry);
     // v3.4.2: Update placeholder with preserved metadata (duration, size) immediately
@@ -2632,25 +2935,25 @@
     return true;
   }
 
+  /** v3.6.1: every loaded video (playing or not) + loaded frames that are completely off screen. */
   function releaseCandidates() {
     const candidates = [];
     for (const entry of state.mediaEntries) {
       if (!entry.loaded || !entry.element || !entry.element.isConnected) continue;
-      if (entry.kind === 'video') {
-        if (entry.element.paused && !entry.element.ended) candidates.push(entry);
-      } else if (entry.kind === 'frame' && isFullyOffScreen(entry.element)) {
-        candidates.push(entry);
-      }
+      if (entry.kind === 'video') candidates.push(entry);
+      else if (entry.kind === 'frame' && isFullyOffScreen(entry.element)) candidates.push(entry);
     }
     return candidates;
   }
 
   function releaseInactiveNow() {
+    loadAllRun++;          // a running "Unlock & Load All" stops here, so the two never fight each other
+    loadAllBusy = false;
     let videosReleased = 0;
     let framesReleased = 0;
 
     for (const entry of releaseCandidates()) {
-      if (entry.kind === 'video' && releaseVideoEntry(entry)) videosReleased++;
+      if (entry.kind === 'video' && releaseVideoEntry(entry, true)) videosReleased++;
       else if (entry.kind === 'frame' && releaseFrameEntry(entry)) framesReleased++;
     }
 
@@ -3102,7 +3405,11 @@
    * 15. Safeguards: gestures, playback guard, ad scripts, requests, popups
    * ==================================================================== */
 
-  function noteUserGesture() { state.lastGesture = Date.now(); }
+  function noteUserGesture(event) {
+    state.lastGesture = Date.now();
+    // v3.6.1: a tap on our own panel (closed shadow root -> retargeted to its host) is not a gesture on the page
+    if (!(state.ui && event && event.target === state.ui.host)) state.lastPageGesture = state.lastGesture;
+  }
 
   function userActive() {
     try { if (navigator.userActivation && navigator.userActivation.isActive) return true; } catch (_) {}
@@ -3158,6 +3465,12 @@
       return;
     }
 
+    // v3.6.1: "Unlock & Load All" only unlocks: anything the site starts by itself afterwards is paused
+    if (holdBlocksPlay(video)) {
+      safePause(video);
+      return;
+    }
+
     if (!(video instanceof HTMLVideoElement)) return;
 
     if (settings.autoPause) {
@@ -3199,6 +3512,18 @@
    * play(), autoplay) can no longer start a download while the video is still locked.
    * -------------------------------------------------------------------- */
 
+  /** v3.6.1: a video just unlocked by "Unlock & Load All" (autoplay is refused while this holds). */
+  function isHeld(el) {
+    const entry = el instanceof HTMLMediaElement ? videoStates.get(el) : null;
+    return !!(entry && entry.loaded && entry.holdUntil > Date.now());
+  }
+
+  /** The hold ends for good at the first tap / key on the page after the unlock (or after LOAD_ALL_HOLD_MS). */
+  function holdBlocksPlay(el) {
+    const entry = el instanceof HTMLMediaElement ? videoStates.get(el) : null;
+    return !!(entry && entry.loaded && entry.holdUntil > Date.now() && !(state.lastPageGesture > entry.unlockedAt));
+  }
+
   /** True while a media element must not touch the network (locked, or an unseen video). */
   function isLockedMedia(el) {
     if (!settings.enabled || !(el instanceof HTMLMediaElement) || unsafeVideos.has(el)) return false;
@@ -3223,6 +3548,9 @@
       if (isLockedMedia(this)) {
         return Promise.reject(new DOMException('Video is locked by Shahvani Ultra Lite', 'NotAllowedError'));
       }
+      if (holdBlocksPlay(this)) {
+        return Promise.reject(new DOMException('Playback is held after Unlock & Load All', 'NotAllowedError'));
+      }
       return NATIVE.play.apply(this, arguments);
     };
 
@@ -3233,11 +3561,12 @@
         configurable: true,
         enumerable: desc.enumerable,
         get: desc.get,
-        set(value) { desc.set.call(this, isLockedMedia(this) ? locked : value); }
+        set(value) { desc.set.call(this, (isLockedMedia(this) || (prop === 'autoplay' && isHeld(this))) ? locked : value); }
       });
     }
 
     mp.setAttribute = function (name, value) {
+      if (typeof name === 'string' && name.toLowerCase() === 'autoplay' && isHeld(this)) return;
       if (typeof name === 'string' && isLockedMedia(this)) {
         const key = name.toLowerCase();
         if (key === 'autoplay') return;
@@ -3382,10 +3711,14 @@
   } catch (_) {}
 
   /* ======================================================================
-   * 15b. Download tab and "Unlock & Load All" (v3.6.0)
+   * 15b. Download tab and "Unlock & Load All" (v3.6.0, live rows + persistent thumbnails v3.6.1)
    *   - The Download list is read straight from the page DOM, so it works while the script is Off.
    *   - Nothing here requests anything by itself: a download / copy happens only on a tap, thumbnails are
    *     drawn from images / frames the page already has, links come from data the page already holds.
+   *     The only request of ours is the optional "Get size & duration" (a few KB per video, user-started,
+   *     or automatic when the "Video info" mode is already set to auto).
+   *   - Rows update in place the moment a thumbnail / duration / size becomes known (no menu re-open), and
+   *     thumbnails + sizes + durations are kept in IndexedDB, so they come back after a reload.
    *   - Downloads use a plain <a download> click: Firefox's own download manager does the rest.
    * ==================================================================== */
 
@@ -3395,18 +3728,30 @@
   const DOWNLOAD_CONFIRM_OVER = 10;   // more than this needs a second tap
   const LOAD_ALL_GAP_MS = 200;
   const LOAD_ALL_WARN_OVER = 20;
-  const THUMB_W = 112;
-  const THUMB_H = 63;
+  const LOAD_ALL_HOLD_MS = 30000;     // v3.6.1: after Unlock & Load All the site cannot start playback for this long (or until the first tap on the page)
+  const THUMB_MAX_SIDE = 240;         // longest side of a stored thumbnail (the whole picture, never cropped)
   const THUMB_MAX = 150;
+  const THUMB_JPEG_QUALITY = 0.72;
+  const ROW_FLUSH_MS = 120;           // rows are repainted at most this often
+  const ROW_POLL_MS = 1500;           // while the Download tab is open: pick up new videos / decoded frames
+  const INFO_CONCURRENCY = 2;
+  const INFO_CONFIRM_OVER = 10;
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const ICON_DOWNLOAD = 'M12 4v11M7 11l5 5 5-5M5 20h14';
   const ICON_COPY = 'M8 8h12v12H8zM16 8V4H4v12h4';
 
   const selection = new Map();   // key -> { k, u, i, d, s }  (key, url, number, duration, size) - survives DOM changes
-  const thumbCache = new Map();  // key -> { canvas, kind: 'poster' | 'frame' }
-  const dlUI = { rows: new Map(), count: null, btnDl: null, btnCopy: null, area: null };
+  const thumbCache = new Map();  // key -> { url?: data URL, canvas?: HTMLCanvasElement (tainted: memory only), kind: 'poster' | 'frame' }
+  const dlInfo = new Map();      // key -> { duration, size, state: '' | 'run' | 'done' | 'fail' }  (state = our own size/duration lookup)
+  const dlUI = { box: null, rows: new Map(), count: null, btnDl: null, btnCopy: null, btnInfo: null, area: null, empty: null };
+  const dlHydrated = new Set();  // keys whose IndexedDB lookup was already done on this page
+  const dlMetaSaved = new Set();
   let dlBusy = false;
+  let dlRowTimer = 0;
+  let dlPollTimer = 0;
+  let dlInfoBusy = false;
   let loadAllBusy = false;
+  let loadAllRun = 0;            // bumped by Release: a running "Unlock & Load All" notices and stops
 
   function loadSelection() {
     try {
@@ -3438,39 +3783,125 @@
     try { return new URL(raw, document.baseURI).href; } catch (_) { return ''; }
   }
 
-  function thumbKey(entry) {
-    const el = entry && entry.element;
-    const url = el ? videoURLOf(el, entry) : '';
+  function keyOfVideo(video, entry) {
+    const url = video ? videoURLOf(video, entry) : '';
     return url ? hashKey(videoKeyUrl(url)) : '';
   }
 
-  /** Draws an already-loaded image / video frame into a small canvas (cover crop). No network, no pixel reads. */
+  function thumbKey(entry) {
+    return entry && entry.element ? keyOfVideo(entry.element, entry) : '';
+  }
+
+  /* ---- thumbnails ---- */
+
+  /**
+   * Draws an already-loaded image / video frame into a small canvas (cover crop): no network, no pixel reads.
+   * The result is kept as a small JPEG (memory + IndexedDB). A canvas tainted by a cross-origin image cannot
+   * be exported, so it stays in memory only. A poster thumbnail is never replaced by a frame.
+   */
   function storeThumb(key, source, sw, sh, kind) {
     if (!key || !(sw > 0 && sh > 0)) return;
     const old = thumbCache.get(key);
     if (old && old.kind === 'poster' && kind !== 'poster') return;
     try {
+      // the whole picture with its own proportions (v3.6.1: no more centre crop), shrunk so that the longest side fits
+      const scale = Math.min(1, THUMB_MAX_SIDE / Math.max(sw, sh));
       const canvas = document.createElement('canvas');
-      canvas.width = THUMB_W;
-      canvas.height = THUMB_H;
-      const target = THUMB_W / THUMB_H;
-      let cw = sw;
-      let ch = sh;
-      if (sw / sh > target) cw = sh * target; else ch = sw / target;
-      canvas.getContext('2d').drawImage(source, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, THUMB_W, THUMB_H);
+      canvas.width = Math.max(1, Math.round(sw * scale));
+      canvas.height = Math.max(1, Math.round(sh * scale));
+      canvas.getContext('2d').drawImage(source, 0, 0, sw, sh, 0, 0, canvas.width, canvas.height);
+      let url = '';
+      try { url = canvas.toDataURL('image/jpeg', THUMB_JPEG_QUALITY); } catch (_) { url = ''; }
+      if (url && !/^data:image\//.test(url)) url = '';
       thumbCache.delete(key);
-      thumbCache.set(key, { canvas, kind });
+      thumbCache.set(key, { url, canvas: url ? null : canvas, kind });
       while (thumbCache.size > THUMB_MAX) thumbCache.delete(thumbCache.keys().next().value);
+      if (url) idbSaveThumb(key, url, kind);
+      queueRowUpdate();
     } catch (_) {}
   }
 
-  function captureFrame(entry) {
-    const video = entry && entry.element;
-    if (!video || video.readyState < 2 || !(video.videoWidth > 0)) return;
-    const key = thumbKey(entry);
+  /** A decoded frame of any <video> of the page (locked-and-opened, opened by the site, or the script is Off). */
+  function captureAny(video, entry) {
+    if (!(video instanceof HTMLVideoElement) || video.readyState < 2 || !(video.videoWidth > 0)) return;
+    const key = keyOfVideo(video, entry || videoStates.get(video));
+    if (!key) return;
     const old = thumbCache.get(key);
-    if (!key || (old && old.kind === 'poster')) return;
+    if (old && old.kind === 'poster') return;
     storeThumb(key, video, video.videoWidth, video.videoHeight, 'frame');
+  }
+
+  function captureFrame(entry) {
+    if (entry && entry.element) captureAny(entry.element, entry);
+  }
+
+  /** Remember a duration the browser itself reported (the video element knows it: no request of ours). */
+  function noteVideoDuration(video) {
+    if (!(video instanceof HTMLVideoElement) || !(Number.isFinite(video.duration) && video.duration > 0)) return;
+    const entry = videoStates.get(video);
+    const key = keyOfVideo(video, entry);
+    if (!key) return;
+    learnInfo(key, video.duration, 0);
+    const url = videoURLOf(video, entry);
+    const tag = key + ':' + Math.round(video.duration);
+    if (url && !dlMetaSaved.has(tag)) {
+      dlMetaSaved.add(tag);
+      saveVideoCache({ videoSrc: url, videoDuration: video.duration, videoSize: 0, probed: false });
+    }
+    queueRowUpdate();
+  }
+
+  function onMediaEvent(event) {
+    const video = event.target;
+    if (!(video instanceof HTMLVideoElement)) return;
+    if (event.type === 'loadeddata') captureAny(video);
+    noteVideoDuration(video);
+  }
+  for (const type of ['loadeddata', 'loadedmetadata', 'durationchange']) document.addEventListener(type, onMediaEvent, true);
+
+  /** Frames / durations of videos that were already decoded before we looked (the page opened them, or the script is Off). */
+  function sweepVideos() {
+    for (const video of document.querySelectorAll('video')) {
+      if (video.readyState < 1) continue;
+      noteVideoDuration(video);
+      if (video.readyState >= 2) captureAny(video);
+    }
+  }
+
+  /* ---- duration / size knowledge ---- */
+
+  function learnInfo(key, duration, size) {
+    if (!key) return false;
+    let info = dlInfo.get(key);
+    if (!info) { info = { duration: 0, size: 0, state: '' }; dlInfo.set(key, info); }
+    let changed = false;
+    if (duration > 0 && !(info.duration > 0)) { info.duration = duration; changed = true; }
+    if (size > 0 && !(info.size > 0)) { info.size = size; changed = true; }
+    return changed;
+  }
+
+  /** Called by updatePlaceholderInfo: an entry just learned (or re-showed) its duration / size. */
+  function dlInfoChanged(entry) {
+    if (!entry || entry.kind !== 'video' || entry.audio) return;
+    if (!(entry.videoDuration > 0 || entry.videoSize > 0)) return;
+    const key = thumbKey(entry);
+    if (!key) return;
+    learnInfo(key, entry.videoDuration, entry.videoSize);
+    queueRowUpdate();
+  }
+
+  /** IndexedDB (no network): thumbnails + durations + sizes remembered from earlier visits, for rows not hydrated yet. */
+  function hydrateRows(rows) {
+    const need = [];
+    for (const rec of rows) {
+      if (rec.live && !dlHydrated.has(rec.key)) { dlHydrated.add(rec.key); need.push(rec.key); }
+    }
+    if (!need.length) return;
+    Promise.all([idbGetThumbs(need), idbGetVideoMetaMany(need)]).then(([thumbs, metas]) => {
+      for (const [key, th] of thumbs) if (!thumbCache.has(key)) thumbCache.set(key, { url: th.url, canvas: null, kind: th.kind });
+      for (const [key, m] of metas) learnInfo(key, m.duration, m.size);
+      queueRowUpdate();
+    }).catch(() => {});
   }
 
   /** { ok, url, sameOrigin } or { ok: false, reason: 'stream' | 'bad' } - a fake link is never produced. */
@@ -3479,7 +3910,19 @@
     try { u = new URL(raw, document.baseURI); } catch (_) { return { ok: false, reason: 'bad' }; }
     if (!/^https?:$/.test(u.protocol)) return { ok: false, reason: 'bad' };
     if (/\.(m3u8|mpd)$/i.test(u.pathname)) return { ok: false, reason: 'stream' };
-    return { ok: true, url: u.href, sameOrigin: u.origin === location.origin };
+    const sameOrigin = u.origin === location.origin;
+    // native: <a download> (same origin) | gm: manager download (another origin, up.shahvani.com) | tab: no manager -> new tab
+    return { ok: true, url: u.href, sameOrigin, mode: sameOrigin ? 'native' : (GM_FN.download ? 'gm' : 'tab') };
+  }
+
+  /** File name for a manager download: the last path segment of the URL (always with an extension). */
+  function fileNameOf(url) {
+    let name = '';
+    try { name = decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop() || ''); } catch (_) {}
+    name = name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').trim();
+    if (!name) name = 'video';
+    if (!/\.[A-Za-z0-9]{2,5}$/.test(name)) name += '.mp4';
+    return name;
   }
 
   /** Rows of the Download list: videos of this page (DOM order, same numbering as the cards) + selected ones that left the page. */
@@ -3496,9 +3939,11 @@
       if (live.has(key)) continue;
       live.add(key);
       const snap = selection.get(key);
-      let duration = entry && entry.videoDuration > 0 ? entry.videoDuration : (Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0);
-      let size = entry && entry.videoSize > 0 ? entry.videoSize : 0;
-      if (snap) { duration = duration || snap.d; size = size || snap.s; }
+      const known = dlInfo.get(key);
+      const duration = (entry && entry.videoDuration > 0 ? entry.videoDuration : 0)
+        || (Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0)
+        || (known ? known.duration : 0) || (snap ? snap.d : 0);
+      const size = (entry && entry.videoSize > 0 ? entry.videoSize : 0) || (known ? known.size : 0) || (snap ? snap.s : 0);
       rows.push({ key, url, index: n, duration, size, live: true });
     }
     for (const snap of selection.values()) {
@@ -3526,6 +3971,15 @@
     return id === 'download' && selection.size ? t(key) + ' (' + selection.size + ')' : t(key);
   }
 
+  function dlActive() {
+    return !!(dlUI.box && dlUI.box.isConnected);
+  }
+
+  function missingInfoRecs() {
+    return downloadRows().filter(rec => rec.live && linkInfo(rec.url).ok && !(rec.duration > 0 && rec.size > 0)
+      && !(dlInfo.get(rec.key) && dlInfo.get(rec.key).state));
+  }
+
   function refreshDownloadUI() {
     const ui = state.ui;
     if (ui) {
@@ -3536,6 +3990,7 @@
       dlUI.count.textContent = t('dlSelectedCount', { n: selection.size, m: dlUI.rows.size });
       if (dlUI.btnDl) dlUI.btnDl.refresh();
       if (dlUI.btnCopy) dlUI.btnCopy.refresh();
+      if (dlUI.btnInfo) dlUI.btnInfo.refresh();
     }
   }
 
@@ -3565,42 +4020,83 @@
     syncDownloadRows();
   }
 
-  /** One plain <a download> click. Inside our shadow root, so the page's own click handlers never see it. */
-  function triggerDownload(url) {
+  function clickAnchor(url, attrs) {
     try {
       const a = document.createElement('a');
       a.href = url;
-      a.setAttribute('download', '');
-      a.rel = 'noopener';
+      for (const [name, value] of Object.entries(attrs)) a.setAttribute(name, value);
+      a.rel = 'noopener noreferrer';
       a.style.display = 'none';
       (state.ui ? state.ui.root : (document.body || document.documentElement)).appendChild(a);
       a.click();
       window.setTimeout(() => a.remove(), 1000);
-    } catch (_) {}
+      return true;
+    } catch (_) { return false; }
   }
 
-  /** Same-origin direct links only: for another origin Firefox ignores "download" and would navigate away. */
+  /** One plain <a download> click (same origin). Inside our shadow root, so the page's own click handlers never see it. */
+  function triggerDownload(url) {
+    return clickAnchor(url, { download: '' });
+  }
+
+  /** Last resort for another origin without a manager: the video opens in a new tab and can be saved from there. */
+  function openInTab(url) {
+    return clickAnchor(url, { target: '_blank' });
+  }
+
+  /** Download through the manager (another origin). A refusal (disabled / not whitelisted / no permission) falls back to a tab. */
+  function gmDownloadFile(url) {
+    if (!GM_FN.download) return openInTab(url);
+    let reported = false;
+    const fail = code => {
+      if (reported) return;
+      reported = true;
+      setStatus('stDlGmFailed', { err: String(code || 'error') }, true);
+      openInTab(url);
+    };
+    try {
+      const r = GM_FN.download({
+        url,
+        name: fileNameOf(url),
+        saveAs: false,
+        onerror: e => fail(e && (e.error || e.details)),
+        ontimeout: () => fail('timeout')
+      });
+      if (r && typeof r.catch === 'function') r.catch(e => fail(e && e.error));
+      return true;
+    } catch (_) {
+      fail('error');
+      return false;
+    }
+  }
+
+  /** Same origin: Firefox's own download (plain link). Other origin (up.shahvani.com): the manager's download. */
   function downloadRecs(recs) {
     if (dlBusy) { setStatus('stDlBusy', null, true); return; }
-    const urls = [];
+    const jobs = [];
     let skipped = 0;
     for (const rec of recs) {
       const info = linkInfo(rec.url);
-      if (info.ok && info.sameOrigin && !urls.includes(info.url)) urls.push(info.url);
-      else if (!(info.ok && info.sameOrigin)) skipped++;
+      if (!info.ok) skipped++;
+      else if (!jobs.some(job => job.url === info.url)) jobs.push({ url: info.url, mode: info.mode });
     }
-    if (!urls.length) { setStatus('stDlUnavailable', { m: skipped }, true); return; }
+    if (!jobs.length) { setStatus('stDlUnavailable', { m: skipped }, true); return; }
 
     dlBusy = true;
     let i = 0;
     const next = () => {
-      triggerDownload(urls[i++]);
-      if (i < urls.length) {
-        setStatus('stDlSending', { i, n: urls.length });
+      const job = jobs[i++];
+      if (job.mode === 'native') triggerDownload(job.url);
+      else if (job.mode === 'gm') gmDownloadFile(job.url);
+      else openInTab(job.url);
+      if (i < jobs.length) {
+        setStatus('stDlSending', { i, n: jobs.length });
         window.setTimeout(next, DOWNLOAD_GAP_MS);
       } else {
         dlBusy = false;
-        setStatus('stDlSent', { n: urls.length, m: skipped }, true);
+        const tabs = jobs.filter(job => job.mode === 'tab').length;
+        if (tabs) setStatus('stDlSentTabs', { n: jobs.length - tabs, t: tabs, m: skipped }, true);
+        else setStatus('stDlSent', { n: jobs.length, m: skipped }, true);
       }
     };
     next();
@@ -3633,6 +4129,102 @@
     }, () => showManualCopy(text));
   }
 
+  /* ---- size & duration lookup for the Download rows (v3.6.1) ---- */
+
+  /** Gives a live entry what the lookup learned, so its lock card shows the same numbers. */
+  function giveEntryInfo(key, duration, size) {
+    for (const entry of state.mediaEntries) {
+      if (entry.kind !== 'video' || entry.audio || thumbKey(entry) !== key) continue;
+      let changed = false;
+      if (duration > 0 && !(entry.videoDuration > 0)) { entry.videoDuration = duration; changed = true; }
+      if (size > 0 && !(entry.videoSize > 0)) { entry.videoSize = size; changed = true; }
+      entry.probed = true;
+      if (changed) updatePlaceholderInfo(entry);
+    }
+  }
+
+  /**
+   * Tiny Range requests (the same probe the "Video info: auto" mode uses): size from Content-Range, duration from
+   * the container header. At most INFO_CONCURRENCY at a time; every video at most once per page.
+   * @returns {Promise<number>} how many videos got something new
+   */
+  function fetchRowInfo(recs) {
+    const todo = [];
+    for (const rec of recs) {
+      const known = dlInfo.get(rec.key);
+      if (!rec.live || !linkInfo(rec.url).ok || (known && known.state)) continue;
+      if (rec.duration > 0 && rec.size > 0) continue;
+      if (!todo.some(item => item.key === rec.key)) todo.push(rec);
+    }
+    if (!todo.length) return Promise.resolve(0);
+
+    for (const rec of todo) {
+      learnInfo(rec.key, 0, 0);
+      dlInfo.get(rec.key).state = 'run';
+    }
+    queueRowUpdate();
+
+    let got = 0;
+    let i = 0;
+    const worker = async () => {
+      while (i < todo.length) {
+        const rec = todo[i++];
+        const info = dlInfo.get(rec.key);
+        let result = null;
+        try {
+          if (probeSession.has(rec.key)) {
+            result = probeSession.get(rec.key);
+          } else {
+            state.probeCount++;
+            result = await probeVideo(rec.url);
+            probeSession.set(rec.key, result);
+          }
+        } catch (err) {
+          result = null;
+          if (err && err.name === 'AbortError') { info.state = ''; queueRowUpdate(); continue; }   // stopped (script Off): may be retried
+        }
+        if (!(result && result.duration > 0)) {
+          // the Range probe could not read / understand this file (another origin without CORS, unusual container...)
+          const seconds = await elementDuration(rec.url);
+          if (seconds > 0) result = { size: result ? result.size : 0, duration: seconds };
+          probeSession.set(rec.key, result);
+        }
+        if (result && (result.size > 0 || result.duration > 0)) {
+          if (learnInfo(rec.key, result.duration, result.size)) got++;
+          info.state = 'done';
+          saveVideoCache({ videoSrc: rec.url, videoDuration: result.duration, videoSize: result.size, probed: true });
+          giveEntryInfo(rec.key, result.duration, result.size);
+        } else {
+          info.state = result ? 'done' : 'fail';
+        }
+        queueRowUpdate();
+      }
+    };
+    return Promise.all(Array.from({ length: Math.min(INFO_CONCURRENCY, todo.length) }, worker)).then(() => got);
+  }
+
+  function startInfoFetch() {
+    if (dlInfoBusy) { setStatus('stDlInfoBusy', null, true); return; }
+    const recs = missingInfoRecs();
+    if (!recs.length) { setStatus('stDlInfoNone', null, true); return; }
+    dlInfoBusy = true;
+    setStatus('stDlInfoStart', { n: recs.length }, true);
+    fetchRowInfo(recs).then(got => {
+      dlInfoBusy = false;
+      setStatus('stDlInfoDone', { n: got, m: recs.length }, true);
+      refreshDownloadUI();
+    }, () => { dlInfoBusy = false; });
+  }
+
+  /** "Video info: auto" already allows tiny Range requests for cards in view: the Download rows follow the same setting. */
+  function autoRowInfo() {
+    if (probeMode() !== 'auto' || dlInfoBusy || state.probeCount >= PROBE_SESSION_MAX || document.hidden) return;
+    const recs = missingInfoRecs();
+    if (recs.length) fetchRowInfo(recs).catch(() => {});
+  }
+
+  /* ---- Unlock & Load All / locked list ---- */
+
   function lockedVideoEntries() {
     const list = [];
     for (const entry of state.mediaEntries) {
@@ -3642,35 +4234,54 @@
   }
 
   /**
-   * "Unlock & Load All Videos": the normal activation path (activateVideo) for every locked video, one after the
-   * other, restored with preload=auto so the browser starts buffering. Not a download to disk. Release is untouched.
+   * Unlock one video WITHOUT starting it: the normal activation path with playNow = false, the source restored
+   * with preload=auto (the browser buffers it), and playback held (see holdBlocksPlay) so nothing the site does
+   * afterwards can start it either. The hold ends at the first tap on the page, or after LOAD_ALL_HOLD_MS.
+   */
+  function unlockEntry(entry) {
+    if (!state.mediaEntries.has(entry) || entry.loaded || !entry.element || !entry.element.isConnected) return false;
+    entry.fullLoad = true;
+    try { activateVideo(entry, false, true); } finally { entry.fullLoad = false; }
+    if (!entry.loaded) return false;
+    const now = Date.now();
+    entry.unlockedAt = now;
+    entry.holdUntil = now + LOAD_ALL_HOLD_MS;
+    safePause(entry.element);
+    return true;
+  }
+
+  /**
+   * "Unlock & Load All Videos": every locked video, one after the other. Safe to repeat and to mix with Release
+   * (Release bumps loadAllRun, which stops a run that is still going).
    */
   function loadAllVideos() {
     if (state.emergency) { setStatus('stEmergencyBlocked', null, true); return; }
-    if (loadAllBusy) return;
+    if (!settings.enabled) return;
+    if (loadAllBusy) { setStatus('stLoadAllBusy', null, true); return; }
     const list = lockedVideoEntries();
     if (!list.length) { setStatus('stNoLocked', null, true); return; }
 
+    const run = ++loadAllRun;
     loadAllBusy = true;
     setStatus('stLoadAllStart', { n: list.length }, true);
     let index = 0;
     let done = 0;
+    const finish = () => {
+      if (run !== loadAllRun) return;     // Release took over
+      loadAllBusy = false;
+      setStatus('stLoadAllDone', { n: done }, true);
+      scheduleUIUpdate();
+    };
     const step = () => {
-      if (index >= list.length || !settings.enabled || state.emergency) {
-        loadAllBusy = false;
-        setStatus('stLoadAllDone', { n: done }, true);
-        return;
-      }
-      const entry = list[index++];
-      if (state.mediaEntries.has(entry) && !entry.loaded && entry.element && entry.element.isConnected) {
-        entry.fullLoad = true;
-        activateVideo(entry, false, true);
-        done++;
-      }
+      if (run !== loadAllRun) return;
+      if (index >= list.length || !settings.enabled || state.emergency) { finish(); return; }
+      if (unlockEntry(list[index++])) done++;
       window.setTimeout(step, LOAD_ALL_GAP_MS);
     };
     step();
   }
+
+  /* ---- rows ---- */
 
   function svgIcon(path) {
     const svg = document.createElementNS(SVG_NS, 'svg');
@@ -3689,25 +4300,61 @@
     return svg;
   }
 
+  function thumbNode(cached) {
+    if (cached.url) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.decoding = 'async';
+      img.draggable = false;
+      img.src = cached.url;
+      return img;
+    }
+    return cached.canvas;
+  }
+
+  /** Writes the current thumbnail / duration / size of a row into its elements (only what changed). */
+  function paintRow(ref) {
+    const rec = ref.rec;
+    const cached = thumbCache.get(rec.key) || null;
+    if (ref.thumbOf !== cached) {
+      ref.thumbOf = cached;
+      ref.thumb.textContent = '';
+      const node = cached ? thumbNode(cached) : null;
+      if (node) ref.thumb.append(node); else ref.thumb.textContent = '▶';
+      ref.thumb.classList.toggle('has', !!node);    // a real thumbnail decides its own height (full picture, real ratio)
+    }
+
+    const known = dlInfo.get(rec.key);
+    const running = !!(known && known.state === 'run');
+    const setChip = (chip, text, empty) => {
+      const value = text || (running ? '…' : empty);
+      if (chip.textContent !== value) chip.textContent = value;
+      chip.classList.toggle('unk', !text);
+    };
+    setChip(ref.dur, formatDuration(rec.duration), '--:--');
+    setChip(ref.size, formatSize(rec.size), '-- MB');
+  }
+
   function downloadRow(rec) {
     const info = linkInfo(rec.url);
-    const canDownload = info.ok && info.sameOrigin;
+    const canDownload = info.ok;
     const on = selection.has(rec.key);
 
     const cb = h('span', { class: 'cb', role: 'checkbox', tabindex: '0', 'aria-label': t('dlTipSelect'),
       'aria-checked': String(on), 'data-on': on ? '1' : '0', text: '✓' });
 
     const thumb = h('div', { class: 'dlth', 'aria-hidden': 'true' });
-    const cached = thumbCache.get(rec.key);
-    if (cached) thumb.append(cached.canvas); else thumb.textContent = '▶';
+    // duration + size are ALWAYS part of the row: a dash placeholder until the real value is known
+    const dur = h('span', { class: 'dlchip unk', title: t('dlChipDuration'), text: '--:--' });
+    const size = h('span', { class: 'dlchip unk', title: t('dlChipSize'), text: '-- MB' });
 
-    const meta = [formatDuration(rec.duration), formatSize(rec.size)].filter(Boolean).join(' · ');
     const notes = [];
     if (!rec.live) notes.push(t('dlOffPage'));
     if (!info.ok) notes.push(t(info.reason === 'stream' ? 'dlStream' : 'dlNoLink'));
-    else if (!info.sameOrigin) notes.push(t('dlNoDirect'));
+    else if (info.mode === 'gm') notes.push(t('dlViaTm'));
+    else if (info.mode === 'tab') notes.push(t('dlNoDirect'));
     const infoBox = h('div', { class: 'dlinfo' }, h('b', { text: '#' + (rec.index || '-') }),
-      meta ? h('small', { text: meta }) : null, ...notes.map(text => h('small', { text })));
+      h('div', { class: 'dlmeta' }, dur, size), ...notes.map(text => h('small', { text })));
 
     const action = (path, tip, fn, disabled) => {
       const button = h('button', { class: 'ib', type: 'button', title: tip, 'aria-label': tip });
@@ -3716,20 +4363,80 @@
       button.addEventListener('click', event => { event.stopPropagation(); fn(); });
       return button;
     };
+    const ref = { row: null, cb, thumb, dur, size, rec, thumbOf: undefined };
     const actions = h('div', { class: 'dlact' },
-      action(ICON_DOWNLOAD, t('dlTipDownload'), () => downloadRecs([rec]), !canDownload),
-      action(ICON_COPY, t('dlTipCopy'), () => copyRecs([rec]), !info.ok));
+      action(ICON_DOWNLOAD, t('dlTipDownload'), () => downloadRecs([ref.rec]), !canDownload),
+      action(ICON_COPY, t('dlTipCopy'), () => copyRecs([ref.rec]), !info.ok));
 
-    const row = h('div', { class: 'dlrow' + (rec.live ? '' : ' off') }, cb, thumb, infoBox, actions);
-    activate(cb, () => toggleRow(rec));
-    infoBox.addEventListener('click', () => toggleRow(rec));
-    thumb.addEventListener('click', () => toggleRow(rec));
-    return { row, cb, rec };
+    ref.row = h('div', { class: 'dlrow' + (rec.live ? '' : ' off') }, cb, thumb, infoBox, actions);
+    activate(cb, () => toggleRow(ref.rec));
+    infoBox.addEventListener('click', () => toggleRow(ref.rec));
+    thumb.addEventListener('click', () => toggleRow(ref.rec));
+    paintRow(ref);
+    return ref;
+  }
+
+  const rowOrder = rec => (rec.live ? 0 : 100000) + (rec.index || 0);
+
+  function insertRow(rec) {
+    const ref = downloadRow(rec);
+    let before = null;
+    for (const other of dlUI.rows.values()) {
+      if (rowOrder(other.rec) > rowOrder(rec) && (!before || rowOrder(other.rec) < rowOrder(before.rec))) before = other;
+    }
+    if (before && before.row.parentNode === dlUI.box) dlUI.box.insertBefore(ref.row, before.row); else dlUI.box.append(ref.row);
+    dlUI.rows.set(rec.key, ref);
+    return ref;
+  }
+
+  /** Repaints the open list in place: new thumbnails / durations / sizes, videos that appeared or left. */
+  function refreshRows() {
+    if (!dlActive()) return;
+    const rows = downloadRows();
+    hydrateRows(rows);
+    const seen = new Set();
+    for (const rec of rows) {
+      seen.add(rec.key);
+      const ref = dlUI.rows.get(rec.key);
+      if (!ref) { insertRow(rec); continue; }
+      if (ref.rec.live !== rec.live || ref.rec.url !== rec.url) {      // left the page / source changed: rebuild this row only
+        ref.row.remove();
+        dlUI.rows.delete(rec.key);
+        insertRow(rec);
+        continue;
+      }
+      ref.rec = rec;
+      const snap = selection.get(rec.key);
+      if (snap) { snap.d = rec.duration || snap.d; snap.s = rec.size || snap.s; }   // the saved selection keeps the newest numbers
+      paintRow(ref);
+    }
+    for (const [key, ref] of Array.from(dlUI.rows)) {
+      if (!seen.has(key)) { ref.row.remove(); dlUI.rows.delete(key); }
+    }
+    if (dlUI.empty) dlUI.empty.style.display = dlUI.rows.size > 0 ? 'none' : '';
+    refreshDownloadUI();
+  }
+
+  function queueRowUpdate() {
+    if (dlRowTimer || !dlActive()) return;
+    dlRowTimer = window.setTimeout(() => { dlRowTimer = 0; refreshRows(); }, ROW_FLUSH_MS);
+  }
+
+  /** While the tab is open: catches videos the page adds / decodes without any event of ours (also when the script is Off). */
+  function startRowPoll() {
+    if (dlPollTimer) return;
+    dlPollTimer = window.setInterval(() => {
+      if (!dlActive() || document.hidden) { if (!dlActive()) { window.clearInterval(dlPollTimer); dlPollTimer = 0; } return; }
+      sweepVideos();
+      refreshRows();
+      autoRowInfo();
+    }, ROW_POLL_MS);
   }
 
   /** Download tab: independent of the script's On/Off state (no dim(), no entries needed). */
   function buildDownload() {
     const f = document.createDocumentFragment();
+    sweepVideos();
     const rows = downloadRows();
     dlUI.rows = new Map();
     for (const rec of rows) if (selection.has(rec.key)) selectRec(rec, true, true);   // refresh snapshots (duration / size)
@@ -3744,6 +4451,12 @@
       if (!selection.size) { setStatus('stDlNone', null, true); return null; }
       return false;
     }, () => copyRecs(selectedRecs()));
+    dlUI.btnInfo = confirmButton(() => t('dlGetInfo', { n: missingInfoRecs().length }), () => {
+      if (dlInfoBusy) { setStatus('stDlInfoBusy', null, true); return null; }
+      const n = missingInfoRecs().length;
+      if (!n) { setStatus('stDlInfoNone', null, true); return null; }
+      return n > INFO_CONFIRM_OVER ? t('dlGetInfoConfirm', { n }) : false;
+    }, startInfoFetch);
     dlUI.area = h('textarea', { dir: 'ltr', spellcheck: 'false', readonly: '', hidden: '' });
 
     f.append(section(t('tabDownload'), h('div', { class: 'pad' },
@@ -3751,19 +4464,25 @@
       h('div', { class: 'two' },
         h('button', { class: 'btn', type: 'button', text: t('dlSelectAll'), onclick: () => setAllSelected(true) }),
         h('button', { class: 'btn', type: 'button', text: t('dlDeselectAll'), onclick: () => setAllSelected(false) })),
-      dlUI.btnDl, dlUI.btnCopy, dlUI.area,
+      dlUI.btnDl, dlUI.btnCopy, dlUI.btnInfo, dlUI.area,
       h('div', { class: 'note', text: t('dlNote') }))));
 
-    const box = h('div', { class: 'dlbox' });
-    if (!rows.length) box.append(h('div', { class: 'note', text: t('dlEmpty') }));
+    dlUI.box = h('div', { class: 'dlbox' });
+    dlUI.empty = h('div', { class: 'note', text: t('dlEmpty') });
+    dlUI.empty.style.display = rows.length > 0 ? 'none' : '';
+    dlUI.box.append(dlUI.empty);
     for (const rec of rows) {
       const ref = downloadRow(rec);
       dlUI.rows.set(rec.key, ref);
-      box.append(ref.row);
+      dlUI.box.append(ref.row);
     }
-    f.append(box);
+    f.append(dlUI.box);
+
+    // the box is not in the document yet: the first lookup / poll runs right after the panel attached it
+    window.setTimeout(() => { hydrateRows(rows); refreshRows(); autoRowInfo(); startRowPoll(); }, 0);
     return f;
   }
+
 
   /* ======================================================================
    * 16. Menu (v3.1.0 neumorphic slide-over drawer + v6 7 tabs)
@@ -3917,9 +4636,19 @@
     .dlrow:first-child { border-top: 0; }
     .dlrow.off { opacity: .75; }
     .dlrow .cb { cursor: pointer; }
-    .dlth { flex: none; width: 84px; height: 47px; border-radius: 8px; overflow: hidden; display: grid; place-items: center;
+    /* v3.6.1: fixed width, 16:9 until a thumbnail exists; a real thumbnail keeps ITS proportions (portrait / 4:3 / 16:9)
+       and is always shown whole (object-fit: contain, never cropped). Works the same on Firefox Windows and Android. */
+    .dlth { flex: none; align-self: flex-start; box-sizing: border-box; width: clamp(76px, 26vw, 112px); aspect-ratio: 16 / 9;
+      border-radius: 8px; overflow: hidden; display: grid; place-items: center;
       background: var(--card); border: 1px solid var(--bd); color: var(--mut); font-size: 18px; cursor: pointer; }
-    .dlth canvas { width: 100%; height: 100%; display: block; }
+    .dlth.has { aspect-ratio: auto; background: #000; }
+    .dlth canvas, .dlth img { display: block; width: 100%; height: auto; max-height: 150px; object-fit: contain;
+      pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-user-drag: none; }
+    @media (max-width: 380px) { .dlact { flex-direction: column; } }
+    .dlmeta { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0; }
+    .dlchip { font-size: .82em; font-variant-numeric: tabular-nums; padding: 1px 8px; border-radius: 999px;
+      background: var(--card); border: 1px solid var(--bd); }
+    .dlchip.unk { color: var(--mut); opacity: .7; }
     .dlinfo { flex: 1; min-width: 0; cursor: pointer; }
     .dlinfo b { display: block; font-weight: 650; }
     .dlinfo small { display: block; color: var(--mut); font-size: .82em; line-height: 1.35; }
@@ -4316,7 +5045,7 @@
   }
 
   const TABS = [
-    ['home', 'tabHome', buildHome], ['video', 'tabVideo', buildVideo], ['download', 'tabDownload', buildDownload], ['frames', 'tabFrames', buildFrames], ['ads', 'tabAds', buildAds],
+    ['home', 'tabHome', buildHome], ['download', 'tabDownload', buildDownload], ['video', 'tabVideo', buildVideo], ['frames', 'tabFrames', buildFrames], ['ads', 'tabAds', buildAds],
     ['page', 'tabPage', buildPage], ['look', 'tabLook', buildLook], ['data', 'tabData', buildData]
   ];
 
@@ -4375,6 +5104,7 @@
     state.uiTimer = window.setTimeout(() => {
       state.uiTimer = 0;
       updatePanelNow();
+      queueRowUpdate();   // v3.6.1: the open Download list follows entries that appeared / changed
     }, UI_UPDATE_MS);
   }
 
@@ -4471,6 +5201,7 @@
     // v3.5.3: everything that locks media starts synchronously. Nothing waits for storage -
     // in 3.5.2 the observer was only attached after IndexedDB opened, so videos had already begun loading.
     initializeNow();
+    window.setTimeout(idbPruneThumbs, 6000);   // v3.6.1
 
     // IndexedDB only keeps a backup of the settings; adopt it if localStorage was empty (cleared / private).
     idbLoadSettings().then(idbSettings => {
@@ -4524,6 +5255,7 @@
       state, settings, T, DEFAULTS, KNOWN_AD_HOSTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
       videoStates, activateVideo, releaseInactiveNow, hashKey, videoKeyUrl, isLockedMedia,
       selection, downloadRows, linkInfo, copyRecs, downloadRecs, loadAllVideos, THEME_COLORS,
+      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo,
       // Internal test functions
       testSanitize: (input) => sanitize(input, { ...DEFAULTS, customAdHosts: [] }),
       testIsUsableURL: (raw) => isUsableURL(raw),

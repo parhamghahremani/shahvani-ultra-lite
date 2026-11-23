@@ -1,7 +1,7 @@
 {
   "name": "shahvani-ultra-lite",
-  "version": "3.6.0",
-  "description": "Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, native Firefox download), video resume, video metadata cache, optional light size/duration probe (off by default).",
+  "version": "3.6.1",
+  "description": "Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).",
   "main": "src/shahvani-ultra-lite.user.js",
   "directories": {
     "test": "tests"
