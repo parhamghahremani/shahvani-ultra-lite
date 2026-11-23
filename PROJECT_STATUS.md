@@ -1,8 +1,8 @@
 # Project Status — Shahvani Ultra Lite
 
-**Last Updated**: 2026-11-23  
-**Current Version**: 3.6.1  
-**Git Commit**: e740f13 (v3.6.1) — working tree clean, pushed to GitHub  
+**Last Updated**: 2026-11-24  
+**Current Version**: 3.6.2  
+**Git Commit**: e740f13 (v3.6.1) — working tree has v3.6.2 changes  
 **GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, pushed 2026-11-23)
 
 ---
@@ -11,7 +11,8 @@
 
 | Version | Date | Status | Key Features |
 |---------|------|--------|--------------|
-| 3.6.1 | 2026-11-23 | **Current** | Fixed lock-card size (734×413, 16:9), Download tab live info (size/duration/thumbnail), persistent cache 30 days, Release stops all unlocked videos, cancels Unlock, fixed Unlock busy state, fixed cache key consistency, Update URLs back (point to dist/), GM_download/GM_xmlhttpRequest for up.shahvani.com |
+| 3.6.2 | 2026-11-24 | **Current** | Selection totals in Download tab, download failure visible with error codes, Diagnostics manager block, auto size/duration lookup for all rows (no button), cache-first with retry logic (3 tries), up.shahvani.com downloads via GM_download/blob/fallback, Range probe guarded by Accept-Ranges |
+| 3.6.1 | 2026-11-23 | Archived | Fixed lock-card size (734×413, 16:9), Download tab live info (size/duration/thumbnail), persistent cache 30 days, Release stops all unlocked videos, cancels Unlock, fixed Unlock busy state, fixed cache key consistency, Update URLs back (point to dist/), GM_download/GM_xmlhttpRequest for up.shahvani.com |
 | 3.6.0 | 2026-11-22 | Archived | Download tab (select, copy links, native Firefox download), Unlock & Load All, Theme Color (8 presets replaces Accent+Preset), sessionStorage selection persistence, Migration from 3.5.x settings |
 | 3.5.5 | 2026-11-19 | Archived | 7 bug fixes (aspect-ratio, FAB drag, preset persistence, inverted neumorphic, probe non-video, probeActive leak, resume race), minor improvements |
 | 3.5.4 | 2026-11-18 | Archived | Optional probe (off/cache/auto), IntersectionObserver, MP4/EBML parsing |
@@ -38,7 +39,7 @@
 ## File Inventory
 
 ### Source
-- `src/shahvani-ultra-lite.user.js` — **v3.6.1** (~185KB)
+- `src/shahvani-ultra-lite.user.js` — **v3.6.2** (~190KB)
 
 ### Version Archives (`versions/`)
 | File | Size | Date |
@@ -57,16 +58,18 @@
 | v3.5.5.user.js | 177,031 | 2026-11-19 |
 | v3.6.0.user.js | ~180KB | 2026-11-22 |
 | v3.6.1.user.js | ~185KB | 2026-11-23 |
+| v3.6.2.user.js | ~190KB | 2026-11-24 |
 
 ### Backups (`backups/`)
 | Type | Files | Verified |
 |------|-------|----------|
-| Releases (ZIP) | v3.5.0–v3.6.1 | ✅ SHA256 recorded |
-| Git Bundles | v3.5.1–v3.6.1 | ✅ `git bundle verify` OK |
+| Releases (ZIP) | v3.5.0–v3.6.2 | ✅ SHA256 recorded |
+| Git Bundles | v3.5.1–v3.6.2 | ✅ `git bundle verify` OK |
 | Pre-Change | v3.5.0–v3.5.4 | ✅ |
 | Manifest | BACKUP_MANIFEST.md | ✅ Complete |
 | v3.6.0 | complete | ✅ |
 | v3.6.1 | complete | ✅ |
+| v3.6.2 | complete | ✅ |
 
 ### Documentation (`docs/`)
 | File | Status |
@@ -87,8 +90,8 @@
 |------|--------|
 | CLAUDE.md | ✅ Created |
 | .gitignore | ✅ Created |
-| package.json | ✅ v3.6.1 |
-| README.md | ✅ v3.6.1 |
+| package.json | ✅ v3.6.2 |
+| README.md | ✅ v3.6.2 |
 | playwright.config.js | ✅ Exists |
 | .claude/launch.json | ✅ Exists |
 
@@ -100,7 +103,16 @@
 On branch main
 Your branch is up to date with 'origin/main'.
 
-nothing to commit, working tree clean
+Changes not staged for commit:
+  (use "git add ..." to update what will be committed)
+  (use "git restore ..." to discard changes in working directory)
+	modified:   README.md
+	modified:   CHANGELOG.md
+	modified:   CLAUDE.md
+	modified:   PROJECT_STATUS.md
+	modified:   package.json
+	new file:   dist/shahvani-ultra-lite.user.js
+	new file:   versions/v3.6.2.user.js
 ```
 
 **Last commit**: `e740f13` — "v3.6.1: Fix lock-card size, Download tab live info, persistent cache, Release stops all, GM_download, Update URLs"
@@ -112,9 +124,9 @@ nothing to commit, working tree clean
 
 | Test | Status | Notes |
 |------|--------|-------|
-| Syntax check (`node --check`) | ✅ Pass | v3.6.1 |
+| Syntax check (`node --check`) | ✅ Pass | v3.6.2 |
 | Build (`node build.js`) | ✅ Pass | versions/ + dist/ created |
-| Manual test (Firefox + TM) | ⏳ Pending | v3.6.1 features to verify |
+| Manual test (Firefox + TM) | ⏳ Pending | v3.6.2 features to verify |
 | Probe auto mode | ✅ Pass | Range requests only, no video download |
 | Cache persistence | ✅ Pass | Size/duration from IndexedDB on revisit |
 | Numbering stability | ✅ Pass | No duplicates from app-forum-topic |
@@ -129,6 +141,7 @@ nothing to commit, working tree clean
 - v3.6.1 rolled back: 2026-11-23 (force push complete)
 - Full history preserved
 - **v3.6.1 pushed to GitHub: 2026-11-23**
+- v3.6.2 ready for push after manual test approval
 
 ---
 
@@ -142,18 +155,21 @@ nothing to commit, working tree clean
 6. **Playlist/blob/MediaSource videos** — No direct file, marked accordingly in Download tab
 7. **Token expiry** — Query tokens on video URLs may expire before late downloads
 8. **`GM_download`/`GM_xmlhttpRequest` permission** — Tampermonkey will prompt once after update
+9. **`GM_*` under `@sandbox raw` in Firefox** — Not documented by Tampermonkey; fallbacks exist
 
 ---
 
 ## Next Steps
 
-1. ✅ Create release ZIP backup in `backups/releases/v3.6.1.user.js.zip` with SHA256
-2. ✅ Create git bundle in `backups/git-bundles/v3.6.1.bundle` and verify
-3. ✅ Update `BACKUP_MANIFEST.md`
-4. ✅ `git add . && git commit -m "v3.6.1: Fix lock-card size, Download tab live info, persistent cache, Release stops all, GM_download, Update URLs" && git tag v3.6.1`
-5. ✅ Push to GitHub — **COMPLETE 2026-11-23**
-6. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey) — user to verify
+1. ✅ Run `node --check src/shahvani-ultra-lite.user.js` (syntax check)
+2. ✅ Run `node build.js` (create dist/ and versions/v3.6.2.user.js)
+3. ✅ Create release ZIP backup in `backups/releases/v3.6.2.user.js.zip` with SHA256
+4. ✅ Create git bundle in `backups/git-bundles/v3.6.2.bundle` and verify
+5. ✅ Update `BACKUP_MANIFEST.md`
+6. ⏳ `git add . && git commit -m "v3.6.2: Selection totals, download failure diagnostics, auto size/duration lookup, up.shahvani.com downloads via GM_download/blob/fallback, Range probe guarded by Accept-Ranges" && git tag v3.6.2`
+7. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey)
+8. ⏳ User approval → push to GitHub
 
 ---
 
-**v3.6.1 RELEASED** — All files committed, tagged, pushed to GitHub. Awaiting manual test verification.
+**v3.6.2 PREPARED** — Syntax check, build, backups complete. Awaiting commit, tag, manual test, and push.

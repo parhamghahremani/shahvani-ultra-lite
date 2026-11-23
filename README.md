@@ -4,7 +4,7 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 
 **Author:** parham  
 **Homepage:** https://github.com/parhamghahremani  
-**Version:** 3.6.1
+**Version:** 3.6.2
 
 ## Features
 
@@ -17,13 +17,13 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 | **Performance profiles** | Compatible / Balanced / Ultra — escalating optimizations |
 | **Tabbed control panel** | Overview, Video, Frames, Ads, Page, Look, Data, Download (8 tabs) |
 | **Theme Color system** | 8 presets (Teal, Midnight, Forest, Sunset, Monochrome, Ocean, Coral, Rose) — accent + optional surface tint |
-| **Download tab** | Live size/duration/thumbnail per row, persistent cache (30 days), select/copy/download, works while script Off |
-| **Unlock & Load All / Release** | Unlock only (no play), 8s gesture guard; Release stops all unlocked videos (playing or paused), cancels Unlock |
+| **Download tab** | Live size/duration/thumbnail per row, persistent cache (30 days), selection totals (duration + size), select/copy/download, works while script Off |
+| **Unlock & Load All / Release** | Unlock only (no play), 30s gesture guard; Release stops all unlocked videos (playing or paused), cancels Unlock |
 | **Ad host filtering** | Known ad domains (doubleclick, googlesyndication, taboola, etc.) |
 | **Video resume** | Position saved to IndexedDB on pause/pagehide, restored on next visit |
 | **Manual resource release** | One-click release of paused videos + off-screen iframes |
 | **Emergency mode** | Instantly pause all HTML videos, block deferred activation |
-| **Diagnostics** | Long task monitoring, resource count, cleaned entries tracking |
+| **Diagnostics** | Long task monitoring, resource count, cleaned entries tracking, download manager diagnostics (handler, GM_* availability, last 25 errors) |
 | **Detached node cleanup** | Memory leak prevention for SPA/AJAX content |
 | **Bilingual EN/FA UI** | Full RTL support, accessibility attributes |
 | **FAB with drag** | Floating action button, vertical drag, side preference saved |
@@ -107,12 +107,14 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 - **Video list** — all videos on page in DOM order with same numbers as lock cards
 - **Live info** — duration, size, and thumbnail land in the row the moment they are known
 - **Persistent cache** — size, duration, poster, and small JPEG thumbnail cached per video (30 days)
+- **Selection totals** — summed duration and size of selected videos shown next to counter (`Total: 4:45 · 4.5 MB`); incomplete items marked live
 - **Selection** — checkboxes, Select all / Deselect all, counter updates live
-- **Download Selected** — sends to Firefox download manager (shahvani.com) or Tampermonkey GM_download (up.shahvani.com) (500ms gap, >10 needs second tap)
+- **Download Selected** — sends to Firefox download manager (shahvani.com) or Tampermonkey GM_download (up.shahvani.com) (500ms gap, >10 needs second tap); up.shahvani.com: GM_download → blob fallback → copy+tab
+- **Failure visible** — if a download cannot start, red persistent message with manager error code (e.g., `not_succeeded`, `not_whitelisted`, `HTTP 403`)
 - **Copy Selected Links** — one per line, fallback to manual copy box
 - **Per-row actions** — Download / Copy icons with tooltips
 - **Works while script is Off** — reads from DOM, no lock engine needed
-- **Own switch** — "Fill size, duration and thumbnail automatically" (on by default)
+- **Auto size/duration lookup** — for every row, automatic HEAD → tiny Range → browser metadata (no button needed); cache-first on reload
 
 ### Network Tab
 - **Blocked requests log** — recent blocked resource requests
@@ -127,7 +129,7 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 ### Settings Tab
 - **Version info** — current version, build date
 - **Check for updates** — link to GitHub releases
-- **Debug info** — internal state dump
+- **Debug info** — internal state dump (includes `manager` block: handler, GM_* availability, downloadMode, last 25 errors)
 
 ## How It Works
 
@@ -141,12 +143,14 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 8. **Play interception** — blocks non-user-initiated playback via `play` event capture
 9. **On user click** — restores sources → HEAD for size cache (if probe enabled) → `preload=metadata` → play
 10. **Optional probe** — `videoProbe: 'auto'` queues Range requests via IntersectionObserver, reads 16 KB header + 8 KB moov tail, cancels stream before video body downloads
-11. **Panel UI** — FAB creates floating panel with stats and controls
+11. **Auto size/duration lookup** — for every row in Download tab (and on video activation), automatic HEAD → tiny Range → browser metadata; cache-first on reload; retries up to 3 times; `up.shahvani.com` via `GM_xmlhttpRequest` (no CORS)
+12. **Panel UI** — FAB creates floating panel with stats and controls
 
 ## Version History
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| **3.6.2** | 2026-11-24 | Selection totals (duration + size) in Download tab, download failure visible with error codes, Diagnostics manager block, auto size/duration lookup for all rows (no button), cache-first with retry logic, up.shahvani.com downloads via GM_download/blob/fallback, Range probe guarded by Accept-Ranges |
 | **3.6.1** | 2026-11-23 | Fixed lock-card size (734×413, 16:9), Download tab live info (size/duration/thumbnail), persistent cache 30 days, Release stops all unlocked videos, cancels Unlock, fixed Unlock busy state, fixed cache key consistency, Update URLs back (point to dist/) |
 | **3.6.0** | 2026-11-22 | Download tab (select, copy links, native Firefox download), Unlock & Load All, Theme Color (8 presets replaces Accent+Preset), sessionStorage selection persistence, Migration from 3.5.x settings |
 | **3.5.5** | 2026-11-19 | 7 bug fixes: aspect-ratio/min-height with !important, FAB vertical drag (fabY), theme preset persistence, inverted neumorphic option fixed, probe size for non-video files, probeActive counter leak, resume race condition; minor fixes: resume cleanup on finish, resume setting respect, fetch URL object fix, PiP exception, opacity slider debounce, MAX_CUSTOM_AD_HOSTS constant, Persian typo fix |

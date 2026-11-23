@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Shahvani Ultra Lite
 // @namespace    local.shahvani.ultralite
-// @version      3.6.1
+// @version      3.6.2
 // @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
 // @author       parham
 // @homepageURL  https://github.com/parhamghahremani
@@ -21,7 +21,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '3.6.1';
+  const VERSION = '3.6.2';
 
   // v3.6.1: a video / audio / image opened on its own (e.g. a direct up.shahvani.com link in a tab) is the browser's own
   // viewer, not a page: nothing to lock, nothing to patch.
@@ -812,20 +812,25 @@
       tabDownload: 'Download',
       secThemeColor: 'Theme Color',
       dlSelectedCount: 'Selected: {n} of {m}',
+      dlTotals: 'Total: {dur} · {size}',
+      dlTotalsUnknown: ' (+{u} incomplete)',
+      stDlGmStart: 'Downloading {i} of {n} through Tampermonkey: {name}',
+      stDlGmRunning: 'Tampermonkey is still downloading {name} (no progress reports).',
+      stDlGmDone: 'Download finished / started: {name}',
+      stDlBlob: 'Tampermonkey downloader failed, trying the fallback: {name}',
+      stDlSentFailed: 'Started {n}; {f} could not be downloaded (see the red message; link copied / opened). Skipped: {m}.',
       dlSelectAll: 'Select all',
       dlDeselectAll: 'Deselect all',
       dlDownload: 'Download Selected ({n})',
       dlCopy: 'Copy Selected Links ({n})',
       dlConfirm: 'Send {n} downloads? Tap again',
       dlEmpty: 'No videos found on this page.',
-      dlNote: 'Videos of shahvani.com go to the Firefox download manager; videos of up.shahvani.com are downloaded through Tampermonkey. Nothing is downloaded until you tap. Size and duration appear as soon as they are known; Get size & duration asks the server for the first few KB of each video (the video itself is not downloaded).',
+      dlNote: 'Videos of shahvani.com go to the Firefox download manager; videos of up.shahvani.com are downloaded through Tampermonkey. Nothing is downloaded until you tap. Size and duration are looked up automatically (the server is asked for the file header only - the video itself is not downloaded).',
       dlOffPage: 'Not on this page',
       dlStream: 'Stream playlist: no direct file',
       dlNoLink: 'No usable link',
       dlNoDirect: 'Other site: opens in a new tab (save it from there) or use Copy',
       dlViaTm: 'Other site: downloaded through Tampermonkey',
-      stDlGmFailed: 'Tampermonkey could not download it ({err}). Opened in a new tab instead. Check Tampermonkey > Settings > Downloads.',
-      stDlSentTabs: 'Started {n} download(s); {t} opened in a new tab (no Tampermonkey download). Skipped: {m}.',
       dlTipSelect: 'Select this video',
       dlTipDownload: 'Download this video',
       dlTipCopy: 'Copy this video link',
@@ -846,12 +851,6 @@
       stLoadAllDone: 'Unlocked and started loading {n} video(s).',
       dlChipDuration: 'Duration',
       dlChipSize: 'File size',
-      dlGetInfo: 'Get size & duration ({n})',
-      dlGetInfoConfirm: 'Check {n} videos? The first few KB of each file are requested. Tap again',
-      stDlInfoNone: 'Nothing to check: size and duration are known, or there is no link.',
-      stDlInfoBusy: 'Still fetching size and duration.',
-      stDlInfoStart: 'Fetching size and duration of {n} video(s)...',
-      stDlInfoDone: 'Got information for {n} of {m} video(s).',
       stLoadAllBusy: 'Unlock & Load is still running.',
       filteredAds: 'Filtered Ads'
     },
@@ -1058,20 +1057,25 @@
       tabDownload: 'دانلود',
       secThemeColor: 'رنگ تم',
       dlSelectedCount: 'انتخاب‌شده: {n} از {m}',
+      dlTotals: 'جمع: {dur} · {size}',
+      dlTotalsUnknown: ' (+{u} ناقص)',
+      stDlGmStart: 'دانلود {i} از {n} با Tampermonkey: {name}',
+      stDlGmRunning: 'Tampermonkey هنوز در حال دانلود {name} است (گزارش پیشرفت نمی‌دهد).',
+      stDlGmDone: 'دانلود تمام شد / شروع شد: {name}',
+      stDlBlob: 'دانلودر Tampermonkey ناموفق بود، روش جایگزین: {name}',
+      stDlSentFailed: '{n} دانلود شروع شد؛ {f} مورد دانلود نشد (پیام قرمز را ببینید؛ لینک کپی / باز شد). ردشده: {m}.',
       dlSelectAll: 'انتخاب همه',
       dlDeselectAll: 'لغو انتخاب همه',
       dlDownload: 'دانلود انتخاب‌شده‌ها ({n})',
       dlCopy: 'کپی لینک انتخاب‌شده‌ها ({n})',
       dlConfirm: 'ارسال {n} دانلود؟ دوباره لمس کنید',
       dlEmpty: 'ویدیویی در این صفحه پیدا نشد.',
-      dlNote: 'ویدیوهای shahvani.com به مدیر دانلود Firefox می‌روند و ویدیوهای up.shahvani.com با دانلود Tampermonkey دانلود می‌شوند. تا لمس نکنید چیزی دانلود نمی‌شود. حجم و مدت به‌محض مشخص شدن نشان داده می‌شوند؛ دکمه‌ی دریافت حجم و مدت فقط چند کیلوبایت اول هر ویدیو را از سرور می‌گیرد (خود ویدیو دانلود نمی‌شود).',
+      dlNote: 'ویدیوهای shahvani.com به مدیر دانلود Firefox می‌روند و ویدیوهای up.shahvani.com با دانلود Tampermonkey دانلود می‌شوند. تا لمس نکنید چیزی دانلود نمی‌شود. حجم و مدت خودکار دریافت می‌شوند (فقط سرتیتر فایل از سرور خواسته می‌شود؛ خود ویدیو دانلود نمی‌شود).',
       dlOffPage: 'در این صفحه نیست',
       dlStream: 'پلی‌لیست استریم: فایل مستقیم ندارد',
       dlNoLink: 'لینک قابل‌استفاده ندارد',
       dlNoDirect: 'سایت دیگر: در تب جدید باز می‌شود (از آنجا ذخیره کنید) یا کپی کنید',
       dlViaTm: 'سایت دیگر: با دانلود Tampermonkey دانلود می‌شود',
-      stDlGmFailed: 'Tampermonkey نتوانست دانلود کند ({err}). به‌جای آن در تب جدید باز شد. تنظیمات Tampermonkey > Settings > Downloads را بررسی کنید.',
-      stDlSentTabs: '{n} دانلود شروع شد؛ {t} مورد در تب جدید باز شد (دانلود Tampermonkey در دسترس نیست). ردشده: {m}.',
       dlTipSelect: 'انتخاب این ویدیو',
       dlTipDownload: 'دانلود این ویدیو',
       dlTipCopy: 'کپی لینک این ویدیو',
@@ -1092,12 +1096,6 @@
       stLoadAllDone: '{n} ویدیو باز شد و بارگذاری آغاز شد.',
       dlChipDuration: 'مدت زمان',
       dlChipSize: 'حجم فایل',
-      dlGetInfo: 'دریافت حجم و مدت ({n})',
-      dlGetInfoConfirm: 'بررسی {n} ویدیو؟ برای هر فایل فقط چند کیلوبایت اول درخواست می‌شود. دوباره لمس کنید',
-      stDlInfoNone: 'موردی برای بررسی نیست: حجم و مدت مشخص است یا لینک ندارد.',
-      stDlInfoBusy: 'دریافت حجم و مدت هنوز ادامه دارد.',
-      stDlInfoStart: 'در حال دریافت حجم و مدت {n} ویدیو...',
-      stDlInfoDone: 'اطلاعات {n} ویدیو از {m} ویدیو دریافت شد.',
       stLoadAllBusy: 'بارگذاری هنوز ادامه دارد.',
       filteredAds: 'تبلیغات فیلترشده',
     }
@@ -1186,6 +1184,31 @@
       return null;
     })()
   };
+
+  /** v3.6.2: what the manager offers + the last problems of every lookup / download (shown in Diagnostics). */
+  function gmMode() {
+    try { if (typeof GM_info !== 'undefined' && GM_info && GM_info.downloadMode) return String(GM_info.downloadMode); } catch (_) {}
+    return '';
+  }
+
+  function gmHandler() {
+    try { if (typeof GM_info !== 'undefined' && GM_info) return String(GM_info.scriptHandler || '') + ' ' + String(GM_info.version || ''); } catch (_) {}
+    return '';
+  }
+
+  const diagLog = [];
+  function diagNote(stage, url, err) {
+    let host = '';
+    try { host = new URL(url, location.href).host; } catch (_) {}
+    const text = err && err.message ? err.message : String(err == null ? '' : err);
+    diagLog.push({ t: new Date().toISOString().slice(11, 19), stage, host, err: text.slice(0, 160) });
+    while (diagLog.length > 25) diagLog.shift();
+  }
+
+  /** The page's own media requests carry this Referer; hosts with hot-link protection need it for the manager's requests too. */
+  function refererHeader() {
+    return { Referer: location.origin + '/' };
+  }
 
   function isCrossOrigin(url) {
     try { return new URL(url, document.baseURI).origin !== location.origin; } catch (_) { return false; }
@@ -1910,24 +1933,24 @@
   }
 
   /**
-   * File size lookup (HEAD, no body). Called ONLY for a video the user has just opened - never for a
-   * locked one - so the result can be cached for the next visit.
+   * Size / duration lookup of a video that has just been opened (tap or Unlock & Load All) - never of a locked
+   * one - through the same chain as the Download rows (HEAD, then a tiny Range, then the browser's own demuxer),
+   * so another origin (up.shahvani.com) gets its size too. The result is cached for the next visit.
    */
   function fetchVideoSize(entry) {
     if (probeMode() === 'off') return;   // v3.5.4: 'off' = no request of ours, ever
-    const src = entry.videoSrc;
-    if (!src || !isUsableURL(src) || entry.videoSize > 0 || entry.sizeRequested || !NATIVE.fetch) return;
+    if (entry.sizeRequested || (entry.videoSize > 0 && entry.videoDuration > 0)) return;
+    const url = probeURL(entry);
+    if (!url) return;
     entry.sizeRequested = true;
-    let url;
-    try { url = new URL(src, document.baseURI).href; } catch (_) { return; }
-    NATIVE.fetch(url, { method: 'HEAD', credentials: 'same-origin' }).then(r => {
-      const length = parseInt(r.headers.get('content-length') || '0', 10);
-      if (r.ok && length > 0) {
-        entry.videoSize = length;
-        saveVideoCache(entry);
-        updatePlaceholderInfo(entry);
-      }
-    }).catch(() => {});
+    const key = hashKey(videoKeyUrl(entry.videoSrc));
+    const known = probeSession.get(key);
+    if (known) { applyProbeResult(entry, known); return; }
+    probeVideo(url).then(result => {
+      if (!(result.size > 0 || result.duration > 0)) return;
+      probeSession.set(key, result);
+      applyProbeResult(entry, result);
+    }, () => {});
   }
 
   /* ----------------------------------------------------------------------
@@ -2132,26 +2155,88 @@
     return m ? m[1].trim() : '';
   }
 
+  /** A HEAD answer: { ok, size, ranges, type }. A HEAD has no body, so nothing can be pulled by accident. */
+  function parseHead(status, header) {
+    const length = parseInt(header('content-length') || '0', 10);
+    return {
+      ok: status >= 200 && status < 300,
+      size: length > 0 ? length : 0,
+      ranges: /bytes/i.test(header('accept-ranges') || ''),
+      type: (header('content-type') || '').toLowerCase()
+    };
+  }
+
+  /** Cancels a manager request when the signal fires. Returns the detach function. */
+  function gmAbortable(signal, cancel, onAbort) {
+    if (!signal) return () => {};
+    const handler = () => { cancel(); onAbort(); };
+    if (signal.aborted) { handler(); return () => {}; }
+    signal.addEventListener('abort', handler, { once: true });
+    return () => signal.removeEventListener('abort', handler);
+  }
+
+  function gmHead(url, signal) {
+    return new Promise((resolve, reject) => {
+      let req = null;
+      let settled = false;
+      let detach = () => {};
+      const finish = (fn, value) => { if (settled) return; settled = true; detach(); fn(value); };
+      const cancel = () => { try { if (req && typeof req.abort === 'function') req.abort(); } catch (_) {} };
+      detach = gmAbortable(signal, cancel, () => finish(reject, new DOMException('Aborted', 'AbortError')));
+      if (settled) return;
+      try {
+        req = GM_FN.request({
+          method: 'HEAD',
+          url,
+          headers: refererHeader(),
+          timeout: PROBE_TIMEOUT_MS,
+          onload: r => finish(resolve, parseHead(r.status, name => rawHeader(r.responseHeaders, name))),
+          onerror: () => finish(reject, new Error('HEAD request failed')),
+          ontimeout: () => finish(reject, new Error('HEAD timeout')),
+          onabort: () => finish(reject, new DOMException('Aborted', 'AbortError'))
+        });
+      } catch (err) { finish(reject, err); }
+    });
+  }
+
+  async function fetchHead(url, signal) {
+    if (!NATIVE.fetch) throw new Error('no fetch');
+    const res = await NATIVE.fetch(url, { method: 'HEAD', credentials: 'same-origin', signal });
+    return parseHead(res.status, name => res.headers.get(name));
+  }
+
   /**
-   * One Range request through the manager (not limited by CORS): needed for up.shahvani.com, whose answers the
-   * page's own fetch may not read. If the server ignores Range the body is NOT pulled: only the headers are used.
+   * Size (Content-Length) and Range support of a file: HEAD through the manager for another origin (no CORS limit),
+   * through fetch for the same origin; each is the fallback of the other. null = nobody could tell.
+   */
+  async function headInfo(url, signal) {
+    const order = GM_FN.request ? (isCrossOrigin(url) ? [gmHead, fetchHead] : [fetchHead, gmHead]) : [fetchHead];
+    for (const attempt of order) {
+      try {
+        const info = await attempt(url, signal);
+        if (info.ok) return info;
+        diagNote('head', url, 'HTTP status not ok');
+      } catch (err) {
+        if (err && err.name === 'AbortError') throw err;
+        diagNote('head', url, err);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * One Range request through the manager. Only used when a HEAD already said "Accept-Ranges: bytes": a server that
+   * ignores Range would otherwise send the whole file (an arraybuffer answer is only delivered on load).
    */
   function gmRange(url, start, length, signal) {
     return new Promise((resolve, reject) => {
       let req = null;
       let settled = false;
-      const finish = (fn, value) => {
-        if (settled) return;
-        settled = true;
-        if (signal) signal.removeEventListener('abort', onAbort);
-        fn(value);
-      };
+      let detach = () => {};
+      const finish = (fn, value) => { if (settled) return; settled = true; detach(); fn(value); };
       const cancel = () => { try { if (req && typeof req.abort === 'function') req.abort(); } catch (_) {} };
-      const onAbort = () => { cancel(); finish(reject, new DOMException('Aborted', 'AbortError')); };
-      if (signal) {
-        if (signal.aborted) { onAbort(); return; }
-        signal.addEventListener('abort', onAbort, { once: true });
-      }
+      detach = gmAbortable(signal, cancel, () => finish(reject, new DOMException('Aborted', 'AbortError')));
+      if (settled) return;
       const info = r => {
         const contentRange = rawHeader(r.responseHeaders, 'content-range');
         const contentLength = parseInt(rawHeader(r.responseHeaders, 'content-length') || '0', 10);
@@ -2165,7 +2250,7 @@
         req = GM_FN.request({
           method: 'GET',
           url,
-          headers: { Range: 'bytes=' + start + '-' + (start + length - 1) },
+          headers: { ...refererHeader(), Range: 'bytes=' + start + '-' + (start + length - 1) },
           responseType: 'arraybuffer',
           timeout: PROBE_TIMEOUT_MS,
           onreadystatechange: r => {
@@ -2221,11 +2306,11 @@
 
   /**
    * One Range request. total = full file size (Content-Range, or Content-Length if Range was ignored).
-   * v3.6.1: another origin (up.shahvani.com) goes through the manager first (no CORS limits), the page's fetch is the
-   * fallback; the same origin uses fetch first, the manager is the fallback when the browser refuses the answer.
+   * The manager is tried first for another origin (allowGm), the page's fetch is always the other option.
    */
-  async function probeRange(url, start, length, signal) {
-    const order = GM_FN.request ? (isCrossOrigin(url) ? [gmRange, fetchRange] : [fetchRange, gmRange]) : [fetchRange];
+  async function probeRange(url, start, length, signal, allowGm) {
+    const useGm = !!GM_FN.request && allowGm !== false;
+    const order = useGm ? (isCrossOrigin(url) ? [gmRange, fetchRange] : [fetchRange, gmRange]) : [fetchRange];
     let lastError = null;
     for (const attempt of order) {
       try {
@@ -2241,17 +2326,19 @@
   /**
    * Duration straight from the browser's own demuxer: a detached <video preload="metadata"> reads only the header
    * of the file and needs no CORS permission. Last resort when the Range probe cannot read (or understand) a video.
-   * @returns {Promise<number>} seconds, 0 if unknown
+   * @returns {Promise<number>} seconds, 0 if unknown (or stopped through the signal)
    */
-  function elementDuration(url) {
+  function elementDuration(url, signal) {
     return new Promise(resolve => {
       let video = null;
       let done = false;
       let timer = 0;
+      let detach = () => {};
       const finish = value => {
         if (done) return;
         done = true;
         window.clearTimeout(timer);
+        detach();
         try { video.removeAttribute('src'); NATIVE.load.call(video); } catch (_) {}
         resolve(Number.isFinite(value) && value > 0 && value < 1e6 ? value : 0);
       };
@@ -2262,44 +2349,75 @@
         video.addEventListener('loadedmetadata', () => finish(video.duration), { once: true });
         video.addEventListener('error', () => finish(0), { once: true });
         timer = window.setTimeout(() => finish(video.duration), 12000);
-        video.src = url;
+        detach = gmAbortable(signal, () => {}, () => finish(0));
+        if (!done) video.src = url;
       } catch (_) { finish(0); }
     });
   }
 
-  /** Size + duration of one video URL with at most two small Range requests. */
+  /**
+   * Size + duration of one video URL. Chain (each step only when the one before did not answer):
+   *   1. HEAD (no body)         -> size, and whether Range is supported
+   *   2. tiny Range request     -> duration from the container header (and size if HEAD was blocked); another
+   *                                origin through the manager ONLY after HEAD confirmed "Accept-Ranges: bytes"
+   *   3. detached <video>       -> duration from the browser itself (needs no CORS)
+   * Never throws for "nobody could tell": the result is then { size: 0, duration: 0 }. A stop (script Off) throws AbortError.
+   */
   async function probeVideo(url) {
     const ctl = new AbortController();
     state.probeControllers.add(ctl);
     let timedOut = false;
     const timer = window.setTimeout(() => { timedOut = true; ctl.abort(); }, PROBE_TIMEOUT_MS);
+    const result = { size: 0, duration: 0 };
+    let stopped = false;
     try {
-      const first = await probeRange(url, 0, PROBE_HEAD_BYTES, ctl.signal);
-      const result = { size: first.total || 0, duration: 0 };
-      const kind = sniffContainer(first.bytes);
-      // v3.5.5: a playlist (.m3u8 / .mpd) or an error page is not a video file: its length is not a video size.
-      if (kind === '' && !/^video\//.test(first.type || '')) result.size = 0;
-
-      if (kind === 'mp4') {
-        const a = scanMp4(first.bytes, 0);
-        result.duration = a.duration;
-        // moov sits behind a big mdat: ask for exactly that box (only possible when Range works).
-        if (!a.duration && a.next > 0 && first.partial && (!first.total || a.next < first.total)) {
-          const second = await probeRange(url, a.next, PROBE_TAIL_BYTES, ctl.signal);
-          if (second.partial && second.bytes.length >= 8) result.duration = scanMp4(second.bytes, a.next).duration;
-          if (!result.size && second.total) result.size = second.total;
-        }
-      } else if (kind === 'ebml') {
-        result.duration = scanEbml(first.bytes);
+      const head = await headInfo(url, ctl.signal);
+      if (head) {
+        result.size = head.size;
+        if (/^(text\/|application\/(vnd\.apple\.mpegurl|x-mpegurl|dash))/.test(head.type)) result.size = 0;   // a playlist is not a video file
       }
-      return result;
+      const viaManager = !!GM_FN.request && isCrossOrigin(url);
+      const allowGm = !viaManager || !!(head && head.ranges);
+      try {
+        const first = await probeRange(url, 0, PROBE_HEAD_BYTES, ctl.signal, allowGm);
+        if (first.total > 0) result.size = first.total;
+        const kind = sniffContainer(first.bytes);
+        // v3.5.5: a playlist (.m3u8 / .mpd) or an error page is not a video file: its length is not a video size.
+        if (kind === '' && first.bytes.length && !/^video\//.test(first.type || '')) result.size = 0;
+
+        if (kind === 'mp4') {
+          const a = scanMp4(first.bytes, 0);
+          result.duration = a.duration;
+          // moov sits behind a big mdat: ask for exactly that box (only possible when Range works).
+          if (!a.duration && a.next > 0 && first.partial && (!first.total || a.next < first.total)) {
+            const second = await probeRange(url, a.next, PROBE_TAIL_BYTES, ctl.signal, allowGm);
+            if (second.partial && second.bytes.length >= 8) result.duration = scanMp4(second.bytes, a.next).duration;
+            if (!result.size && second.total) result.size = second.total;
+          }
+        } else if (kind === 'ebml') {
+          result.duration = scanEbml(first.bytes);
+        }
+      } catch (err) {
+        if (err && err.name === 'AbortError' && !timedOut) throw err;
+        diagNote('range', url, err);
+      }
     } catch (err) {
-      if (timedOut) throw new Error('timeout');
-      throw err;
+      if (err && err.name === 'AbortError' && !timedOut) stopped = true;
+      else diagNote('probe', url, err);
     } finally {
       window.clearTimeout(timer);
       state.probeControllers.delete(ctl);
     }
+    if (stopped) throw new DOMException('Aborted', 'AbortError');
+
+    if (!(result.duration > 0)) {
+      const ctl2 = new AbortController();
+      state.probeControllers.add(ctl2);
+      try { result.duration = await elementDuration(url, ctl2.signal); } finally { state.probeControllers.delete(ctl2); }
+      if (ctl2.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    }
+    if (!(result.size > 0) && !(result.duration > 0)) diagNote('probe', url, 'nothing could be read');
+    return result;
   }
   // </probe-core>
 
@@ -2389,6 +2507,7 @@
       state.probeActive++;
       state.probeCount++;
       probeVideo(url).then(result => {
+        if (!(result.size > 0 || result.duration > 0)) { entry.probeState = 'failed'; probeSession.set(key, null); return; }
         probeSession.set(key, result);
         try { applyProbeResult(entry, result); } catch (_) {}
       }, err => {
@@ -2649,7 +2768,7 @@
     video.classList.remove('shv-suspended-video');
 
     restoreVideoSources(entry);
-    if (playNow) fetchVideoSize(entry); // only for the video the user just opened
+    fetchVideoSize(entry); // v3.6.2: every video that is opened (tap or Unlock & Load All), never a locked one
 
     // v3.3.0 / v3.5.5: resume position (IndexedDB for a fresh open, memory for a released video).
     // Both paths honour the "Resume position" setting.
@@ -3397,6 +3516,7 @@
       userAgent: navigator.userAgent,
       stats: { ...collectStats(), blockedScripts: state.blockedScripts, blockedRequests: state.blockedRequests, popups: state.popupsBlocked },
       probe: { mode: probeMode(), requests: state.probeCount, bytesRead: state.probeBytes },
+      manager: { handler: gmHandler(), download: !!GM_FN.download, request: !!GM_FN.request, downloadMode: gmMode(), recent: diagLog },
       settings
     }, null, 1);
   }
@@ -3735,16 +3855,20 @@
   const ROW_FLUSH_MS = 120;           // rows are repainted at most this often
   const ROW_POLL_MS = 1500;           // while the Download tab is open: pick up new videos / decoded frames
   const INFO_CONCURRENCY = 2;
-  const INFO_CONFIRM_OVER = 10;
+  const INFO_MAX_FAILS = 3;           // automatic tries per video (15 s, 30 s apart)
+  const INFO_RETRY_MS = 15000;
+  const DL_STALL_MS = 180000;         // a manager download that reports nothing for this long is assumed to be running
+  const BLOB_MAX = /Android/i.test(navigator.userAgent) ? 200 * 1048576 : 800 * 1048576;   // memory fallback limit
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const ICON_DOWNLOAD = 'M12 4v11M7 11l5 5 5-5M5 20h14';
   const ICON_COPY = 'M8 8h12v12H8zM16 8V4H4v12h4';
 
   const selection = new Map();   // key -> { k, u, i, d, s }  (key, url, number, duration, size) - survives DOM changes
   const thumbCache = new Map();  // key -> { url?: data URL, canvas?: HTMLCanvasElement (tainted: memory only), kind: 'poster' | 'frame' }
-  const dlInfo = new Map();      // key -> { duration, size, state: '' | 'run' | 'done' | 'fail' }  (state = our own size/duration lookup)
-  const dlUI = { box: null, rows: new Map(), count: null, btnDl: null, btnCopy: null, btnInfo: null, area: null, empty: null };
-  const dlHydrated = new Set();  // keys whose IndexedDB lookup was already done on this page
+  const dlInfo = new Map();      // key -> { duration, size, state: '' | 'run' | 'done' | 'fail', fails, retryAt }  (our own lookup + its retries)
+  const dlUI = { box: null, rows: new Map(), count: null, total: null, err: null, btnDl: null, btnCopy: null, area: null, empty: null };
+  const dlHydrated = new Set();  // keys whose IndexedDB lookup was started on this page
+  const dlHydrateDone = new Set(); // ... and finished: the cache is always asked before the network
   const dlMetaSaved = new Set();
   let dlBusy = false;
   let dlRowTimer = 0;
@@ -3873,7 +3997,7 @@
   function learnInfo(key, duration, size) {
     if (!key) return false;
     let info = dlInfo.get(key);
-    if (!info) { info = { duration: 0, size: 0, state: '' }; dlInfo.set(key, info); }
+    if (!info) { info = { duration: 0, size: 0, state: '', fails: 0, retryAt: 0 }; dlInfo.set(key, info); }
     let changed = false;
     if (duration > 0 && !(info.duration > 0)) { info.duration = duration; changed = true; }
     if (size > 0 && !(info.size > 0)) { info.size = size; changed = true; }
@@ -3896,12 +4020,15 @@
     for (const rec of rows) {
       if (rec.live && !dlHydrated.has(rec.key)) { dlHydrated.add(rec.key); need.push(rec.key); }
     }
-    if (!need.length) return;
-    Promise.all([idbGetThumbs(need), idbGetVideoMetaMany(need)]).then(([thumbs, metas]) => {
+    if (!need.length) return Promise.resolve();
+    return Promise.all([idbGetThumbs(need), idbGetVideoMetaMany(need)]).then(([thumbs, metas]) => {
       for (const [key, th] of thumbs) if (!thumbCache.has(key)) thumbCache.set(key, { url: th.url, canvas: null, kind: th.kind });
       for (const [key, m] of metas) learnInfo(key, m.duration, m.size);
+    }).catch(() => {}).then(() => {
+      for (const key of need) dlHydrateDone.add(key);   // only now may a lookup (network) be considered for these videos
       queueRowUpdate();
-    }).catch(() => {});
+      if (dlActive()) autoRowInfo();
+    });
   }
 
   /** { ok, url, sameOrigin } or { ok: false, reason: 'stream' | 'bad' } - a fake link is never produced. */
@@ -3975,9 +4102,29 @@
     return !!(dlUI.box && dlUI.box.isConnected);
   }
 
+  /** A video whose size or duration is still unknown and whose lookup is not running / out of tries. */
+  function infoEligible(rec) {
+    if (!rec.live || !dlHydrateDone.has(rec.key) || !linkInfo(rec.url).ok || (rec.duration > 0 && rec.size > 0)) return false;
+    const known = dlInfo.get(rec.key);
+    if (!known || !known.state) return true;
+    return known.state === 'fail' && known.fails < INFO_MAX_FAILS && Date.now() >= known.retryAt;
+  }
+
   function missingInfoRecs() {
-    return downloadRows().filter(rec => rec.live && linkInfo(rec.url).ok && !(rec.duration > 0 && rec.size > 0)
-      && !(dlInfo.get(rec.key) && dlInfo.get(rec.key).state));
+    return downloadRows().filter(infoEligible);
+  }
+
+  /** Sum of the selected videos: only what is known is counted; `unknown` = selected videos without size or duration. */
+  function selectionTotals() {
+    let size = 0;
+    let duration = 0;
+    let unknown = 0;
+    for (const item of selection.values()) {
+      if (item.s > 0) size += item.s;
+      if (item.d > 0) duration += item.d;
+      if (!(item.s > 0 && item.d > 0)) unknown++;
+    }
+    return { size, duration, unknown };
   }
 
   function refreshDownloadUI() {
@@ -3988,9 +4135,13 @@
     }
     if (dlUI.count && dlUI.count.isConnected) {
       dlUI.count.textContent = t('dlSelectedCount', { n: selection.size, m: dlUI.rows.size });
+      if (dlUI.total) {
+        const sum = selectionTotals();
+        dlUI.total.textContent = t('dlTotals', { dur: formatDuration(sum.duration) || '0:00', size: formatSize(sum.size) || '0 MB' })
+          + (sum.unknown ? t('dlTotalsUnknown', { u: sum.unknown }) : '');
+      }
       if (dlUI.btnDl) dlUI.btnDl.refresh();
       if (dlUI.btnCopy) dlUI.btnCopy.refresh();
-      if (dlUI.btnInfo) dlUI.btnInfo.refresh();
     }
   }
 
@@ -4044,33 +4195,131 @@
     return clickAnchor(url, { target: '_blank' });
   }
 
-  /** Download through the manager (another origin). A refusal (disabled / not whitelisted / no permission) falls back to a tab. */
-  function gmDownloadFile(url) {
-    if (!GM_FN.download) return openInTab(url);
-    let reported = false;
-    const fail = code => {
-      if (reported) return;
-      reported = true;
-      setStatus('stDlGmFailed', { err: String(code || 'error') }, true);
-      openInTab(url);
-    };
-    try {
-      const r = GM_FN.download({
-        url,
-        name: fileNameOf(url),
-        saveAs: false,
-        onerror: e => fail(e && (e.error || e.details)),
-        ontimeout: () => fail('timeout')
-      });
-      if (r && typeof r.catch === 'function') r.catch(e => fail(e && e.error));
-      return true;
-    } catch (_) {
-      fail('error');
-      return false;
+  const sleepMs = ms => new Promise(resolve => window.setTimeout(resolve, ms));
+
+  /** The last download problem stays on screen (a toast is gone before it can be read). */
+  function dlReport(text) {
+    if (text) diagNote('download', '', text);
+    if (dlUI.err && dlUI.err.isConnected) {
+      dlUI.err.textContent = text || '';
+      dlUI.err.style.display = text ? '' : 'none';
     }
   }
 
-  /** Same origin: Firefox's own download (plain link). Other origin (up.shahvani.com): the manager's download. */
+  function errCode(e) {
+    if (!e) return 'error';
+    let detail = '';
+    if (e.details) detail = typeof e.details === 'string' ? e.details : (e.details.current || e.details.error || '');
+    return String(e.error || e.message || 'error') + (detail ? ' (' + String(detail).slice(0, 80) + ')' : '');
+  }
+
+  /** The video's address stays usable when nothing else works: copied (always) and opened in a tab (a popup blocker may stop it). */
+  function linkFallback(urls) {
+    const list = Array.isArray(urls) ? urls : [urls];
+    copyText(list.join('\n')).catch(() => {});
+    openInTab(list[0]);
+  }
+
+  /** Stage 1: the manager's own downloader. { ok } | { ok: false, err } | { ok: true, running: true } (silent for DL_STALL_MS). */
+  function gmDownloadStage(url, name) {
+    return new Promise(resolve => {
+      let settled = false;
+      let watchdog = 0;
+      const done = result => { if (settled) return; settled = true; window.clearTimeout(watchdog); resolve(result); };
+      const arm = () => { window.clearTimeout(watchdog); watchdog = window.setTimeout(() => done({ ok: true, running: true }), DL_STALL_MS); };
+      try {
+        arm();
+        const handle = GM_FN.download({
+          url,
+          name,
+          headers: refererHeader(),
+          saveAs: false,
+          conflictAction: 'uniquify',
+          onload: () => done({ ok: true }),
+          onerror: e => done({ ok: false, err: errCode(e) }),
+          ontimeout: () => done({ ok: false, err: 'timeout' }),
+          onprogress: arm
+        });
+        if (handle && typeof handle.then === 'function') handle.then(() => done({ ok: true }), e => done({ ok: false, err: errCode(e) }));
+      } catch (err) {
+        done({ ok: false, err: errCode(err) });
+      }
+    });
+  }
+
+  /**
+   * Stage 2 (the manager's downloader failed): the manager fetches the file as a blob and Firefox saves it from a
+   * same-origin blob link - Firefox's own download queue again. The whole file is held in memory meanwhile,
+   * so it is skipped above BLOB_MAX (200 MB on Android, 800 MB elsewhere).
+   */
+  function gmBlobStage(url, name, size) {
+    return new Promise(resolve => {
+      if (!GM_FN.request) { resolve({ ok: false, err: 'no request API' }); return; }
+      if (size > BLOB_MAX) { resolve({ ok: false, err: 'too big for the memory fallback (' + formatSize(size) + ')' }); return; }
+      let settled = false;
+      let watchdog = 0;
+      let handle = null;
+      const done = result => { if (settled) return; settled = true; window.clearTimeout(watchdog); resolve(result); };
+      const arm = () => {
+        window.clearTimeout(watchdog);
+        watchdog = window.setTimeout(() => { try { if (handle && handle.abort) handle.abort(); } catch (_) {} done({ ok: false, err: 'no progress' }); }, DL_STALL_MS);
+      };
+      try {
+        arm();
+        handle = GM_FN.request({
+          method: 'GET',
+          url,
+          headers: refererHeader(),
+          responseType: 'blob',
+          onprogress: arm,
+          onload: r => {
+            const blob = r.response;
+            if (r.status < 200 || r.status >= 300) { done({ ok: false, err: 'HTTP ' + r.status }); return; }
+            if (!blob || typeof blob.size !== 'number' || !blob.size) { done({ ok: false, err: 'empty answer' }); return; }
+            if (/^text\/|json|html/i.test(blob.type || '')) { done({ ok: false, err: 'not a video (' + blob.type + ')' }); return; }
+            let href = '';
+            try { href = URL.createObjectURL(blob); } catch (e) { done({ ok: false, err: errCode(e) }); return; }
+            clickAnchor(href, { download: name });
+            window.setTimeout(() => { try { URL.revokeObjectURL(href); } catch (_) {} }, 120000);
+            done({ ok: true });
+          },
+          onerror: () => done({ ok: false, err: 'request failed' }),
+          ontimeout: () => done({ ok: false, err: 'timeout' }),
+          onabort: () => done({ ok: false, err: 'aborted' })
+        });
+      } catch (err) {
+        done({ ok: false, err: errCode(err) });
+      }
+    });
+  }
+
+  /** One video of another origin (up.shahvani.com): manager download -> blob download -> link. Resolves true when a download started. */
+  async function runGmJob(job, i, n) {
+    const name = fileNameOf(job.url);
+    const notes = [];
+    if (GM_FN.download && gmMode() !== 'disabled') {
+      setStatus('stDlGmStart', { i, n, name });
+      const first = await gmDownloadStage(job.url, name);
+      if (first.ok) { setStatus(first.running ? 'stDlGmRunning' : 'stDlGmDone', { name }, true); return true; }
+      notes.push('Tampermonkey: ' + first.err);
+    } else {
+      notes.push(GM_FN.download ? 'Tampermonkey downloads are disabled (Settings > Downloads)' : 'no Tampermonkey download');
+    }
+    if (GM_FN.request) {
+      setStatus('stDlBlob', { name });
+      const size = (dlInfo.get(job.key) && dlInfo.get(job.key).size) || (selection.get(job.key) && selection.get(job.key).s) || 0;
+      const second = await gmBlobStage(job.url, name, size);
+      if (second.ok) { setStatus('stDlGmDone', { name }, true); return true; }
+      notes.push('fallback: ' + second.err);
+    }
+    dlReport(name + ' - ' + notes.join(' | '));
+    return false;
+  }
+
+  /**
+   * Same origin: Firefox's own download (plain link, 500 ms apart). Other origin (up.shahvani.com): the manager,
+   * one video at a time (parallel downloads of big files would exhaust memory), with the fallbacks above.
+   */
   function downloadRecs(recs) {
     if (dlBusy) { setStatus('stDlBusy', null, true); return; }
     const jobs = [];
@@ -4078,28 +4327,34 @@
     for (const rec of recs) {
       const info = linkInfo(rec.url);
       if (!info.ok) skipped++;
-      else if (!jobs.some(job => job.url === info.url)) jobs.push({ url: info.url, mode: info.mode });
+      else if (!jobs.some(job => job.url === info.url)) jobs.push({ url: info.url, mode: info.mode, key: rec.key });
     }
     if (!jobs.length) { setStatus('stDlUnavailable', { m: skipped }, true); return; }
 
     dlBusy = true;
-    let i = 0;
-    const next = () => {
-      const job = jobs[i++];
-      if (job.mode === 'native') triggerDownload(job.url);
-      else if (job.mode === 'gm') gmDownloadFile(job.url);
-      else openInTab(job.url);
-      if (i < jobs.length) {
-        setStatus('stDlSending', { i, n: jobs.length });
-        window.setTimeout(next, DOWNLOAD_GAP_MS);
-      } else {
-        dlBusy = false;
-        const tabs = jobs.filter(job => job.mode === 'tab').length;
-        if (tabs) setStatus('stDlSentTabs', { n: jobs.length - tabs, t: tabs, m: skipped }, true);
-        else setStatus('stDlSent', { n: jobs.length, m: skipped }, true);
+    dlReport('');
+    (async () => {
+      let started = 0;
+      let failed = 0;
+      const links = [];
+      for (let i = 0; i < jobs.length; i++) {
+        const job = jobs[i];
+        if (job.mode === 'native') {
+          triggerDownload(job.url);
+          started++;
+          if (i < jobs.length - 1) { setStatus('stDlSending', { i: i + 1, n: jobs.length }); await sleepMs(DOWNLOAD_GAP_MS); }
+        } else if (job.mode === 'gm') {
+          if (await runGmJob(job, i + 1, jobs.length)) started++; else { failed++; links.push(job.url); }
+        } else {
+          links.push(job.url);                                    // no manager at all
+          failed++;
+        }
       }
-    };
-    next();
+      if (links.length) linkFallback(links);
+      dlBusy = false;
+      if (failed) setStatus('stDlSentFailed', { n: started, f: failed, m: skipped }, true);
+      else setStatus('stDlSent', { n: started, m: skipped }, true);
+    })().catch(() => { dlBusy = false; });
   }
 
   function showManualCopy(text) {
@@ -4129,7 +4384,7 @@
     }, () => showManualCopy(text));
   }
 
-  /* ---- size & duration lookup for the Download rows (v3.6.1) ---- */
+  /* ---- size & duration lookup for the Download rows (automatic, v3.6.2) ---- */
 
   /** Gives a live entry what the lookup learned, so its lock card shows the same numbers. */
   function giveEntryInfo(key, duration, size) {
@@ -4144,17 +4399,16 @@
   }
 
   /**
-   * Tiny Range requests (the same probe the "Video info: auto" mode uses): size from Content-Range, duration from
-   * the container header. At most INFO_CONCURRENCY at a time; every video at most once per page.
+   * Looks the videos up with the chain of probeVideo (HEAD -> tiny Range -> the browser's own demuxer): no body is
+   * ever downloaded. At most INFO_CONCURRENCY at a time. A video that did not answer completely is tried again
+   * (INFO_MAX_FAILS tries in total, INFO_RETRY_MS apart).
    * @returns {Promise<number>} how many videos got something new
    */
   function fetchRowInfo(recs) {
     const todo = [];
     for (const rec of recs) {
-      const known = dlInfo.get(rec.key);
-      if (!rec.live || !linkInfo(rec.url).ok || (known && known.state)) continue;
-      if (rec.duration > 0 && rec.size > 0) continue;
-      if (!todo.some(item => item.key === rec.key)) todo.push(rec);
+      if (!infoEligible(rec) || todo.some(item => item.key === rec.key)) continue;
+      todo.push(rec);
     }
     if (!todo.length) return Promise.resolve(0);
 
@@ -4172,30 +4426,30 @@
         const info = dlInfo.get(rec.key);
         let result = null;
         try {
-          if (probeSession.has(rec.key)) {
-            result = probeSession.get(rec.key);
+          const cached = probeSession.get(rec.key);
+          if (cached) {
+            result = cached;
           } else {
             state.probeCount++;
             result = await probeVideo(rec.url);
-            probeSession.set(rec.key, result);
           }
         } catch (err) {
-          result = null;
           if (err && err.name === 'AbortError') { info.state = ''; queueRowUpdate(); continue; }   // stopped (script Off): may be retried
-        }
-        if (!(result && result.duration > 0)) {
-          // the Range probe could not read / understand this file (another origin without CORS, unusual container...)
-          const seconds = await elementDuration(rec.url);
-          if (seconds > 0) result = { size: result ? result.size : 0, duration: seconds };
-          probeSession.set(rec.key, result);
+          result = null;
         }
         if (result && (result.size > 0 || result.duration > 0)) {
+          probeSession.set(rec.key, result);
           if (learnInfo(rec.key, result.duration, result.size)) got++;
-          info.state = 'done';
           saveVideoCache({ videoSrc: rec.url, videoDuration: result.duration, videoSize: result.size, probed: true });
           giveEntryInfo(rec.key, result.duration, result.size);
+        }
+        // complete = both known; anything less is tried again later (a server that blocks HEAD may answer next time)
+        if (info.duration > 0 && info.size > 0) {
+          info.state = 'done';
         } else {
-          info.state = result ? 'done' : 'fail';
+          info.state = 'fail';
+          info.fails++;
+          info.retryAt = Date.now() + INFO_RETRY_MS * info.fails;
         }
         queueRowUpdate();
       }
@@ -4203,24 +4457,13 @@
     return Promise.all(Array.from({ length: Math.min(INFO_CONCURRENCY, todo.length) }, worker)).then(() => got);
   }
 
-  function startInfoFetch() {
-    if (dlInfoBusy) { setStatus('stDlInfoBusy', null, true); return; }
-    const recs = missingInfoRecs();
-    if (!recs.length) { setStatus('stDlInfoNone', null, true); return; }
-    dlInfoBusy = true;
-    setStatus('stDlInfoStart', { n: recs.length }, true);
-    fetchRowInfo(recs).then(got => {
-      dlInfoBusy = false;
-      setStatus('stDlInfoDone', { n: got, m: recs.length }, true);
-      refreshDownloadUI();
-    }, () => { dlInfoBusy = false; });
-  }
-
-  /** "Video info: auto" already allows tiny Range requests for cards in view: the Download rows follow the same setting. */
+  /** Every poll tick of the open Download tab: videos with missing size / duration are looked up by themselves. */
   function autoRowInfo() {
-    if (probeMode() !== 'auto' || dlInfoBusy || state.probeCount >= PROBE_SESSION_MAX || document.hidden) return;
+    if (dlInfoBusy || document.hidden) return;
     const recs = missingInfoRecs();
-    if (recs.length) fetchRowInfo(recs).catch(() => {});
+    if (!recs.length) return;
+    dlInfoBusy = true;
+    fetchRowInfo(recs).catch(() => {}).then(() => { dlInfoBusy = false; });
   }
 
   /* ---- Unlock & Load All / locked list ---- */
@@ -4442,6 +4685,9 @@
     for (const rec of rows) if (selection.has(rec.key)) selectRec(rec, true, true);   // refresh snapshots (duration / size)
 
     dlUI.count = h('b', { class: 'dlcount', text: t('dlSelectedCount', { n: selection.size, m: rows.length }) });
+    dlUI.total = h('div', { class: 'dlsum' });
+    dlUI.err = h('div', { class: 'note dlerr', role: 'alert' });
+    dlUI.err.style.display = 'none';
     dlUI.btnDl = confirmButton(() => t('dlDownload', { n: selection.size }), () => {
       const n = selection.size;
       if (!n) { setStatus('stDlNone', null, true); return null; }
@@ -4451,20 +4697,14 @@
       if (!selection.size) { setStatus('stDlNone', null, true); return null; }
       return false;
     }, () => copyRecs(selectedRecs()));
-    dlUI.btnInfo = confirmButton(() => t('dlGetInfo', { n: missingInfoRecs().length }), () => {
-      if (dlInfoBusy) { setStatus('stDlInfoBusy', null, true); return null; }
-      const n = missingInfoRecs().length;
-      if (!n) { setStatus('stDlInfoNone', null, true); return null; }
-      return n > INFO_CONFIRM_OVER ? t('dlGetInfoConfirm', { n }) : false;
-    }, startInfoFetch);
     dlUI.area = h('textarea', { dir: 'ltr', spellcheck: 'false', readonly: '', hidden: '' });
 
     f.append(section(t('tabDownload'), h('div', { class: 'pad' },
-      dlUI.count,
+      dlUI.count, dlUI.total,
       h('div', { class: 'two' },
         h('button', { class: 'btn', type: 'button', text: t('dlSelectAll'), onclick: () => setAllSelected(true) }),
         h('button', { class: 'btn', type: 'button', text: t('dlDeselectAll'), onclick: () => setAllSelected(false) })),
-      dlUI.btnDl, dlUI.btnCopy, dlUI.btnInfo, dlUI.area,
+      dlUI.btnDl, dlUI.btnCopy, dlUI.err, dlUI.area,
       h('div', { class: 'note', text: t('dlNote') }))));
 
     dlUI.box = h('div', { class: 'dlbox' });
@@ -4479,7 +4719,7 @@
     f.append(dlUI.box);
 
     // the box is not in the document yet: the first lookup / poll runs right after the panel attached it
-    window.setTimeout(() => { hydrateRows(rows); refreshRows(); autoRowInfo(); startRowPoll(); }, 0);
+    window.setTimeout(() => { hydrateRows(rows); refreshRows(); startRowPoll(); refreshDownloadUI(); }, 0);
     return f;
   }
 
@@ -4631,6 +4871,8 @@
     /* v3.6.0: Download tab */
     .cb:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
     .dlcount { font-variant-numeric: tabular-nums; padding: 2px 4px; }
+    .dlsum { font-size: .88em; color: var(--mut); font-variant-numeric: tabular-nums; padding: 0 4px 2px; }
+    .dlerr { color: #f87171; word-break: break-word; }
     .dlbox { background: var(--card); border: 1px solid var(--bd); border-radius: 16px; padding: 4px 6px; }
     .dlrow { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-top: 1px solid var(--bd); }
     .dlrow:first-child { border-top: 0; }
@@ -5255,7 +5497,7 @@
       state, settings, T, DEFAULTS, KNOWN_AD_HOSTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
       videoStates, activateVideo, releaseInactiveNow, hashKey, videoKeyUrl, isLockedMedia,
       selection, downloadRows, linkInfo, copyRecs, downloadRecs, loadAllVideos, THEME_COLORS,
-      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo,
+      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runGmJob, hydrateRows, selectionTotals, infoEligible, autoRowInfo, diagLog,
       // Internal test functions
       testSanitize: (input) => sanitize(input, { ...DEFAULTS, customAdHosts: [] }),
       testIsUsableURL: (raw) => isUsableURL(raw),

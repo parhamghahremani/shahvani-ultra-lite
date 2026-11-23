@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this format.
 
+## [3.6.2] - 2026-11-24
+
+### Added
+- **Selection totals** in the Download tab: next to the *Selected* counter, the summed duration and size of the selected videos (`Total: 4:45 · 4.5 MB`). If some selected videos are still unknown the line says so (`+1 incomplete`) and updates live as values arrive.
+- **Failure is visible**: if a download cannot be started the Download tab shows a red, persistent message with the manager's error code (for example `not_succeeded`, `not_whitelisted`, `HTTP 403`) instead of silently opening a tab.
+- **Diagnostics**: the Diagnostics text has a `manager` block (handler, whether `GM_download` / `GM_xmlhttpRequest` exist, `downloadMode`, and the last 25 manager errors). Send it with a bug report.
+
+### Changed
+- **"Get size & duration" button removed.** Size and duration are looked up automatically for every row of the Download tab (also while the script is Off), independent of the *Video info* setting. Nothing is downloaded: only `HEAD`, a tiny `Range` request (first 16 KB, plus the 8 KB `moov` tail when needed) or the browser's own metadata reading.
+- **One lookup chain for both hosts**: cache (IndexedDB) → `HEAD` → tiny `Range` → duration read by a detached `<video preload="metadata">` (needs no CORS). Another host goes through `GM_xmlhttpRequest`, the same host through `fetch`; each is the fallback of the other. This is what gives `up.shahvani.com` a size.
+- **Cache first**: after a reload the rows are filled from IndexedDB before any request is made (zero requests when everything is cached).
+- **Failed lookups are retried** automatically: up to 3 tries, 15 s then 30 s apart; then the row stays `-- MB` and no more requests are made.
+- **Videos opened on the page** (tap, *Unlock & Load All*) now also ask for their size, so the lock card gets size and duration, not only duration.
+- **Downloads of other-host videos** (`up.shahvani.com`):
+  1. `GM_download` with the file name from the link and the page as `Referer` (hotlink protection);
+  2. if the manager fails: the file is read through `GM_xmlhttpRequest` and saved by Firefox from a blob link (limit 200 MB on Android, 800 MB elsewhere; bigger files skip this step);
+  3. if that also fails: red message with both reasons, link copied to the clipboard, and the link opened in a tab.
+  Manager downloads run one at a time for batches, so the browser is not flooded.
+- `shahvani.com` videos are unchanged: plain `<a download>` straight into Firefox's download queue.
+
+### Fixed
+- Range probe through the manager could pull a whole file when the server ignored `Range` (guarded: a body is requested through the manager only after `HEAD` reports `Accept-Ranges: bytes`).
+- A failed lookup was never retried.
+- Auto probe had no duration fallback, and the size of another host was only tried (as a cross-origin `HEAD`) after a tap.
+- When the popup was blocked, the tab fallback gave no feedback; the link is now also copied and a message is shown.
+- A race could send requests before the IndexedDB cache was read.
+- Lookups that could not be aborted / were not persisted (now cancel on stop and are saved to the cache).
+
+### Known limitations
+- **Not tested in real Firefox.** Tested with jsdom (mocked Tampermonkey) and desktop Chromium (card size, thumbnails, phone-size viewports). Whether `GM_*` works under `@sandbox raw` in Firefox is not documented by Tampermonkey; the fallbacks (blob download, link copy + tab) exist for that case.
+- The real cause of the 3.6.1 `up.shahvani.com` download failure is unknown (manager settings, hotlink protection, or slow native start). If it still fails, open Diagnostics and send the `manager` block and the red message text.
+- Tampermonkey must have *Downloads* enabled and `mp4` in its whitelist for step 1.
+- A server that answers neither `HEAD` nor `Range` shows the duration only (size stays `-- MB`).
+- Playlist (`.m3u8` / `.mpd`) and blob / MediaSource videos have no direct file.
+- Links keep their query token; a time-limited token may expire before a late download.
+
 ## [3.6.1] - 2026-11-23
 
 ### Added
