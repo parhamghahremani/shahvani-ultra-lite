@@ -178,10 +178,10 @@ Changes not staged for commit:
 3. ✅ Create release ZIP backup in `backups/releases/v3.6.4.user.js.zip` with SHA256
 4. ✅ Create git bundle in `backups/git-bundles/v3.6.4.bundle` and verify
 5. ✅ Update `BACKUP_MANIFEST.md` and `PROJECT_STATUS.md`
-6. ⏳ `git add . && git commit -m "v3.6.4: Saved videos list, sturdier thumbnails on Android, fixed Android downloads with auto-detect, download method setting, IndexedDB v4 savedThumbs, diagnostics" && git tag v3.6.4`
+6. ✅ `git add . && git commit -m "v3.6.4: Saved videos list, sturdier thumbnails on Android, fixed Android downloads with auto-detect, download method setting, IndexedDB v4 savedThumbs, diagnostics" && git tag v3.6.4`
 7. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey)
-8. ⏳ User approval → push to GitHub
+8. ✅ **Pushed to GitHub: 2026-11-24**
 
 ---
 
-**v3.6.4 PREPARED** — Syntax check, build, backups complete. Awaiting commit, tag, manual test, and push.
+**v3.6.4 RELEASED** — All steps complete. Pushed to GitHub. Awaiting manual test on Firefox + Tampermonkey.
