@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Shahvani Ultra Lite
 // @namespace    local.shahvani.ultralite
-// @version      3.6.2
-// @description  Shahvani Ultra Lite: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
+// @version      3.6.3
+// @description  Shahvani Ultra Lite 3.6.3 (keyboard shortcuts, persistent thumbnails, per-page selection, direct download queue): tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
 // @author       parham
 // @homepageURL  https://github.com/parhamghahremani
-// @updateURL    https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/shahvani-ultra-lite.user.js
-// @downloadURL  https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/dist/shahvani-ultra-lite.user.js
+// @updateURL    https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/src/shahvani-ultra-lite.user.js
+// @downloadURL  https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/src/shahvani-ultra-lite.user.js
 // @match        *://shahvani.com/*
 // @match        *://*.shahvani.com/*
 // @run-at       document-start
@@ -15,13 +15,14 @@
 // @grant        GM_xmlhttpRequest
 // @connect      up.shahvani.com
 // @connect      shahvani.com
+// @connect      *
 // @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2aWV3Qm94PSIwIDAgMTI4IDEyOCIgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiPjxkZWZzPjxyYWRpYWxHcmFkaWVudCBpZD0ib3JiIiBjeD0iMC40IiBjeT0iMC4zIiByPSIwLjk1Ij48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMzYTE0NjYiLz48c3RvcCBvZmZzZXQ9IjAuNTUiIHN0b3AtY29sb3I9IiMxNzBhM2EiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwNjAyMTMiLz48L3JhZGlhbEdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0icmVkIiB4MT0iMC4xNSIgeTE9IjAiIHgyPSIwLjgiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZjdhOTIiLz48c3RvcCBvZmZzZXQ9IjAuNCIgc3RvcC1jb2xvcj0iI2ZmMWY1NSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2IwMDAyZSIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJzaWRlIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjOGEwYTJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNDYwNDFhIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9InJpbmdnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMCI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZmM2IwIi8+PHN0b3Agb2Zmc2V0PSIwLjUiIHN0b3AtY29sb3I9IiNmZmM4M2QiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZjlhMWYiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0iZWRnZSIgeDE9IjAiIHkxPSIwIiB4Mj0iMSIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2ZmN2FiOCIvPjxzdG9wIG9mZnNldD0iMC41IiBzdG9wLWNvbG9yPSIjOGI1Y2Y2Ii8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMjJkM2VlIi8+PC9saW5lYXJHcmFkaWVudD48cmFkaWFsR3JhZGllbnQgaWQ9InNwZWMiIGN4PSIwLjUiIGN5PSIwLjUiIHI9IjAuNSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZmIiBzdG9wLW9wYWNpdHk9IjAuOTUiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZmYiIHN0b3Atb3BhY2l0eT0iMCIvPjwvcmFkaWFsR3JhZGllbnQ+PGZpbHRlciBpZD0iYmx1ciIgeD0iLTMwJSIgeT0iLTMwJSIgd2lkdGg9IjE2MCUiIGhlaWdodD0iMTYwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMy41Ii8+PC9maWx0ZXI+PGZpbHRlciBpZD0iYmx1cjUiIHg9Ii0zMCUiIHk9Ii0zMCUiIHdpZHRoPSIxNjAlIiBoZWlnaHQ9IjE2MCUiPjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjUiLz48L2ZpbHRlcj48ZmlsdGVyIGlkPSJibHVyMTAiIHg9Ii02MCUiIHk9Ii02MCUiIHdpZHRoPSIyMjAlIiBoZWlnaHQ9IjIyMCUiPjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjEwIi8+PC9maWx0ZXI+PGZpbHRlciBpZD0iZ2xvdyIgeD0iLTQwJSIgeT0iLTQwJSIgd2lkdGg9IjE4MCUiIGhlaWdodD0iMTgwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMS44IiByZXN1bHQ9ImIiLz48ZmVNZXJnZT48ZmVNZXJnZU5vZGUgaW49ImIiLz48ZmVNZXJnZU5vZGUgaW49IlNvdXJjZUdyYXBoaWMiLz48L2ZlTWVyZ2U+PC9maWx0ZXI+PGNsaXBQYXRoIGlkPSJvY2xpcCI+PGNpcmNsZSBjeD0iNjQiIGN5PSI2NCIgcj0iNTYiLz48L2NsaXBQYXRoPjxwYXRoIGlkPSJoZWFydCIgZD0iTTY0IDExNiBDMTYgODQgNiA1NCA2IDM4IEM2IDIyIDE4IDEwIDM0IDEwIEM0NyAxMCA1OCAxNyA2NCAyOSBDNzAgMTcgODEgMTAgOTQgMTAgQzExMCAxMCAxMjIgMjIgMTIyIDM4IEMxMjIgNTQgMTEyIDg0IDY0IDExNiBaIi8+PGNsaXBQYXRoIGlkPSJoY2xpcCI+PHVzZSB4bGluazpocmVmPSIjaGVhcnQiIGhyZWY9IiNoZWFydCIvPjwvY2xpcFBhdGg+PHBhdGggaWQ9InN0YXIiIGQ9Ik0wIC02IEwxLjYgLTEuNiBMNiAwIEwxLjYgMS42IEwwIDYgTC0xLjYgMS42IEwtNiAwIEwtMS42IC0xLjYgWiIvPjxwYXRoIGlkPSJtaW5pIiBkPSJNMCA2IEMtOSAtMSAtNiAtNyAwIC0zIEM2IC03IDkgLTEgMCA2IFoiLz48ZyBpZD0iZ3NoIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik01MiA2MiBDNDcgNTQgMjYgNTQgMjYgNjUgQzI2IDc2IDUyIDcyIDUyIDgzIEM1MiA5NCAzMCA5NCAyNCA4NiIvPjxwYXRoIGQ9Ik02OCAzMCBWOTIiLz48cGF0aCBkPSJNNjggNzIgQzY4IDYwIDc3IDU1IDg1IDU1IEM5NCA1NSAxMDAgNjEgMTAwIDcxIFY5MiIvPjwvZz48L2RlZnM+PGVsbGlwc2UgY3g9IjY0IiBjeT0iMTIzIiByeD0iMzQiIHJ5PSI0IiBmaWxsPSIjMDAwIiBvcGFjaXR5PSIwLjU1IiBmaWx0ZXI9InVybCgjYmx1cikiLz48Y2lyY2xlIGN4PSI2NCIgY3k9IjY0IiByPSI1NiIgZmlsbD0idXJsKCNvcmIpIi8+PGcgY2xpcC1wYXRoPSJ1cmwoI29jbGlwKSI+PGNpcmNsZSBjeD0iMjYiIGN5PSIyOCIgcj0iMzIiIGZpbGw9IiNjMDI2ZDMiIG9wYWNpdHk9IjAuNDUiIGZpbHRlcj0idXJsKCNibHVyMTApIi8+PGNpcmNsZSBjeD0iMTA2IiBjeT0iMTAyIiByPSIzNCIgZmlsbD0iIzI1NjNlYiIgb3BhY2l0eT0iMC41IiBmaWx0ZXI9InVybCgjYmx1cjEwKSIvPjxjaXJjbGUgY3g9IjEwMCIgY3k9IjI0IiByPSIyMiIgZmlsbD0iI2ZmMmQ3NSIgb3BhY2l0eT0iMC4zMCIgZmlsdGVyPSJ1cmwoI2JsdXIxMCkiLz48ZyBmaWxsPSIjZmZmIj48Y2lyY2xlIGN4PSIyMCIgY3k9IjUwIiByPSIxLjIiIG9wYWNpdHk9IjAuOSIvPjxjaXJjbGUgY3g9IjM0IiBjeT0iMTYiIHI9IjEiIG9wYWNpdHk9IjAuOCIvPjxjaXJjbGUgY3g9IjUyIiBjeT0iMTAiIHI9IjAuOSIgb3BhY2l0eT0iMC43Ii8+PGNpcmNsZSBjeD0iODYiIGN5PSIxMiIgcj0iMS4yIiBvcGFjaXR5PSIwLjkiLz48Y2lyY2xlIGN4PSIxMTIiIGN5PSI0MCIgcj0iMSIgb3BhY2l0eT0iMC44Ii8+PGNpcmNsZSBjeD0iMTE2IiBjeT0iNzAiIHI9IjEuMyIgb3BhY2l0eT0iMC43Ii8+PGNpcmNsZSBjeD0iMTIiIGN5PSI4MiIgcj0iMSIgb3BhY2l0eT0iMC43Ii8+PGNpcmNsZSBjeD0iMzAiIGN5PSIxMDgiIHI9IjEuMiIgb3BhY2l0eT0iMC44Ii8+PGNpcmNsZSBjeD0iNjQiIGN5PSIxMTgiIHI9IjAuOSIgb3BhY2l0eT0iMC42Ii8+PGNpcmNsZSBjeD0iOTYiIGN5PSIxMTIiIHI9IjEiIG9wYWNpdHk9IjAuOCIvPjxjaXJjbGUgY3g9IjQ0IiBjeT0iMTEyIiByPSIwLjgiIG9wYWNpdHk9IjAuNiIvPjxjaXJjbGUgY3g9IjEwOCIgY3k9IjE2IiByPSIwLjkiIG9wYWNpdHk9IjAuNyIvPjwvZz48L2c+PGNpcmNsZSBjeD0iNjQiIGN5PSI2NCIgcj0iNTUiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNlZGdlKSIgc3Ryb2tlLXdpZHRoPSIyLjQiLz48ZyB0cmFuc2Zvcm09InJvdGF0ZSgtMTggNjQgNjYpIj48cGF0aCBkPSJNMTIgNjYgQTUyIDE0IDAgMCAxIDExNiA2NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3JpbmdnKSIgc3Ryb2tlLXdpZHRoPSIyLjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iMC41NSIvPjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2NCA2Mykgc2NhbGUoMC43KSB0cmFuc2xhdGUoLTY0IC02MykiPjx1c2UgeGxpbms6aHJlZj0iI2hlYXJ0IiBocmVmPSIjaGVhcnQiIGZpbGw9IiNmZjFmNTUiIG9wYWNpdHk9IjAuODUiIGZpbHRlcj0idXJsKCNibHVyMTApIi8+PHVzZSB4bGluazpocmVmPSIjaGVhcnQiIGhyZWY9IiNoZWFydCIgZmlsbD0idXJsKCNzaWRlKSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCA2KSIvPjx1c2UgeGxpbms6aHJlZj0iI2hlYXJ0IiBocmVmPSIjaGVhcnQiIGZpbGw9InVybCgjcmVkKSIvPjxnIGNsaXAtcGF0aD0idXJsKCNoY2xpcCkiPjx1c2UgeGxpbms6aHJlZj0iI2hlYXJ0IiBocmVmPSIjaGVhcnQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzZhMDcyMCIgc3Ryb2tlLXdpZHRoPSIxMiIgb3BhY2l0eT0iMC41IiBmaWx0ZXI9InVybCgjYmx1cjUpIi8+PGVsbGlwc2UgY3g9IjMwIiBjeT0iMzAiIHJ4PSIyNCIgcnk9IjE0IiBmaWxsPSJ1cmwoI3NwZWMpIi8+PGVsbGlwc2UgY3g9Ijk4IiBjeT0iMjQiIHJ4PSIxMCIgcnk9IjYiIGZpbGw9InVybCgjc3BlYykiIG9wYWNpdHk9IjAuNiIgdHJhbnNmb3JtPSJyb3RhdGUoLTI1IDk4IDI0KSIvPjwvZz48dXNlIHhsaW5rOmhyZWY9IiNoZWFydCIgaHJlZj0iI2hlYXJ0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS1vcGFjaXR5PSIwLjc1IiBzdHJva2Utd2lkdGg9IjIuMiIvPjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2NCA1Nykgc2NhbGUoMC41NSkgdHJhbnNsYXRlKC02MiAtNjEpIj48ZyBzdHJva2U9IiM1YTA1MTgiIHN0cm9rZS13aWR0aD0iMTUiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAgOCkiPjx1c2UgeGxpbms6aHJlZj0iI2dzaCIgaHJlZj0iI2dzaCIvPjwvZz48ZyBzdHJva2U9IiNhMzQ4MGEiIHN0cm9rZS13aWR0aD0iMTQiPjx1c2UgeGxpbms6aHJlZj0iI2dzaCIgaHJlZj0iI2dzaCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCA2KSIvPjx1c2UgeGxpbms6aHJlZj0iI2dzaCIgaHJlZj0iI2dzaCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCA0LjUpIi8+PHVzZSB4bGluazpocmVmPSIjZ3NoIiBocmVmPSIjZ3NoIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwIDMpIi8+PHVzZSB4bGluazpocmVmPSIjZ3NoIiBocmVmPSIjZ3NoIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwIDEuNSkiLz48L2c+PHVzZSB4bGluazpocmVmPSIjZ3NoIiBocmVmPSIjZ3NoIiBzdHJva2U9IiNmZmQ0NWEiIHN0cm9rZS13aWR0aD0iMTMiLz48L2c+PGcgdHJhbnNmb3JtPSJyb3RhdGUoLTE4IDY0IDY2KSI+PHBhdGggZD0iTTEyIDY2IEE1MiAxNCAwIDAgMCAxMTYgNjYiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNyaW5nZykiIHN0cm9rZS13aWR0aD0iMi42IiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNnbG93KSIvPjxjaXJjbGUgY3g9IjEwNCIgY3k9Ijc1IiByPSIzLjQiIGZpbGw9IiNmZmZiZTAiIGZpbHRlcj0idXJsKCNnbG93KSIvPjxjaXJjbGUgY3g9IjI0IiBjeT0iNzIiIHI9IjIiIGZpbGw9IiNmZmQ0NWEiIGZpbHRlcj0idXJsKCNnbG93KSIvPjwvZz48dXNlIHhsaW5rOmhyZWY9IiNzdGFyIiBocmVmPSIjc3RhciIgZmlsbD0iI2ZmZiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoOTggMjgpIHNjYWxlKDEuNCkiLz48dXNlIHhsaW5rOmhyZWY9IiNzdGFyIiBocmVmPSIjc3RhciIgZmlsbD0iI2ZmZTA4YSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjggMzYpIHNjYWxlKDEpIi8+PHVzZSB4bGluazpocmVmPSIjc3RhciIgaHJlZj0iI3N0YXIiIGZpbGw9IiNmZmYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDk0IDEwNCkgc2NhbGUoMC45KSIvPjx1c2UgeGxpbms6aHJlZj0iI21pbmkiIGhyZWY9IiNtaW5pIiBmaWxsPSIjZmY3YTlhIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMC43IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzMCA5Nikgcm90YXRlKC0xNSkiLz48dXNlIHhsaW5rOmhyZWY9IiNtaW5pIiBocmVmPSIjbWluaSIgZmlsbD0iI2ZmZDFkYyIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjAuNyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTA4IDU2KSByb3RhdGUoMTUpIHNjYWxlKDAuOCkiLz48L3N2Zz4=
 // ==/UserScript==
 
 (() => {
   'use strict';
 
-  const VERSION = '3.6.2';
+  const VERSION = '3.6.3';
 
   // v3.6.1: a video / audio / image opened on its own (e.g. a direct up.shahvani.com link in a tab) is the browser's own
   // viewer, not a page: nothing to lock, nothing to patch.
@@ -53,13 +54,15 @@
   const PROBE_HEAD_BYTES = 16384;       // request 1: ftyp + moov header + mvhd fit easily
   const PROBE_TAIL_BYTES = 8192;        // request 2: starts exactly at the moov box (when it is behind mdat)
   const PROBE_CONCURRENCY = 2;          // gentle on mobile
-  const PROBE_TIMEOUT_MS = 8000;
+  const PROBE_TIMEOUT_MS = 8000;        // one request of the manager / fetch
+  const PROBE_TOTAL_MS = 24000;         // v3.6.3: whole chain of one video (HEAD + Range + element) - the old single 8 s limit cut it short
   const PROBE_SESSION_MAX = 120;        // hard cap per page load (worst case ~3 MB in total)
   const PROBE_VISIBLE_MARGIN = '200px 0px';
   const Z_INDEX_FAB = 2147483646;
   const Z_INDEX_SCRIM = 2147483645;
   const Z_INDEX_PANEL = 2147483647;
   const Z_INDEX_TOAST = 2147483647;
+  const IS_ANDROID = /Android/i.test(navigator.userAgent);
   const IS_TOP = (() => { try { return window.top === window; } catch (_) { return false; } })();
 
   // v3.5.3: Deterministic 64-bit-ish hash (two FNV-1a passes). The 3.5.2 version appended
@@ -139,7 +142,10 @@
     invertedNeumorphic: true,
 
     // v3.5.4: size/duration lookup: 'off' (nothing at all) | 'cache' (local cache only) | 'auto' (Range probe of cards in view)
-    videoProbe: 'off'
+    videoProbe: 'off',
+
+    // v3.6.3: keyboard shortcuts (Alt+Shift+key)
+    shortcuts: true
   });
 
   const ENUMS = {
@@ -818,14 +824,14 @@
       stDlGmRunning: 'Tampermonkey is still downloading {name} (no progress reports).',
       stDlGmDone: 'Download finished / started: {name}',
       stDlBlob: 'Tampermonkey downloader failed, trying the fallback: {name}',
-      stDlSentFailed: 'Started {n}; {f} could not be downloaded (see the red message; link copied / opened). Skipped: {m}.',
+      stDlSentFailed: 'Started {n}; {f} failed (reason in red, links copied; use Retry failed). Skipped: {m}.',
       dlSelectAll: 'Select all',
       dlDeselectAll: 'Deselect all',
       dlDownload: 'Download Selected ({n})',
       dlCopy: 'Copy Selected Links ({n})',
       dlConfirm: 'Send {n} downloads? Tap again',
       dlEmpty: 'No videos found on this page.',
-      dlNote: 'Videos of shahvani.com go to the Firefox download manager; videos of up.shahvani.com are downloaded through Tampermonkey. Nothing is downloaded until you tap. Size and duration are looked up automatically (the server is asked for the file header only - the video itself is not downloaded).',
+      dlNote: 'Downloads go straight into the queue - no confirmation, one video or many. Several run at once; a failed one is listed in red with its reason and can be retried. On Android the Tampermonkey downloader is used for every file, so Firefox does not ask for each one. Videos of up.shahvani.com always go through Tampermonkey (allow its permission prompt once: "Always allow all domains"). Only videos of THIS page can be selected. Size and duration are looked up automatically (file header only).',
       dlOffPage: 'Not on this page',
       dlStream: 'Stream playlist: no direct file',
       dlNoLink: 'No usable link',
@@ -852,7 +858,30 @@
       dlChipDuration: 'Duration',
       dlChipSize: 'File size',
       stLoadAllBusy: 'Unlock & Load is still running.',
-      filteredAds: 'Filtered Ads'
+      filteredAds: 'Filtered Ads',
+      // v3.6.3
+      dlRetry: 'Retry failed ({n})',
+      dlNoteTitle: 'How downloads work',
+      stDlQueue: 'Download queue: {i} of {n} handled, failed: {f}',
+      secShortcuts: 'Keyboard shortcuts',
+      scEnable: 'Enable keyboard shortcuts',
+      scEnableD: 'Alt+Shift+L (open / close the menu) always works, even when this is off.',
+      scNote: 'Letters are physical keys: they work with the Persian layout as well.',
+      scMenu: 'Open / close the menu',
+      scDownloadTab: 'Open the Download tab',
+      scToggleScript: 'Turn the script On / Off',
+      scRelease: 'Release',
+      scLoadAll: 'Unlock & Load All Videos',
+      scPause: 'Pause all media',
+      scSelectAll: 'Select all videos of this page',
+      scDeselectAll: 'Deselect all',
+      scDownload: 'Download the selected videos',
+      scCopy: 'Copy the selected links',
+      scEmergency: 'Emergency stop On / Off',
+      scNowOn: 'Shahvani Ultra Lite: On',
+      scNowOff: 'Shahvani Ultra Lite: Off',
+      scSelected: 'Selected {n} video(s).',
+      scDeselected: 'Selection cleared.'
     },
     fa: {
       brand: 'اولترا لایت',
@@ -1063,14 +1092,14 @@
       stDlGmRunning: 'Tampermonkey هنوز در حال دانلود {name} است (گزارش پیشرفت نمی‌دهد).',
       stDlGmDone: 'دانلود تمام شد / شروع شد: {name}',
       stDlBlob: 'دانلودر Tampermonkey ناموفق بود، روش جایگزین: {name}',
-      stDlSentFailed: '{n} دانلود شروع شد؛ {f} مورد دانلود نشد (پیام قرمز را ببینید؛ لینک کپی / باز شد). ردشده: {m}.',
+      stDlSentFailed: '{n} دانلود شروع شد؛ {f} ناموفق بود (دلیل با رنگ قرمز، لینک‌ها کپی شد؛ «تلاش دوباره» را بزنید). ردشده: {m}.',
       dlSelectAll: 'انتخاب همه',
       dlDeselectAll: 'لغو انتخاب همه',
       dlDownload: 'دانلود انتخاب‌شده‌ها ({n})',
       dlCopy: 'کپی لینک انتخاب‌شده‌ها ({n})',
       dlConfirm: 'ارسال {n} دانلود؟ دوباره لمس کنید',
       dlEmpty: 'ویدیویی در این صفحه پیدا نشد.',
-      dlNote: 'ویدیوهای shahvani.com به مدیر دانلود Firefox می‌روند و ویدیوهای up.shahvani.com با دانلود Tampermonkey دانلود می‌شوند. تا لمس نکنید چیزی دانلود نمی‌شود. حجم و مدت خودکار دریافت می‌شوند (فقط سرتیتر فایل از سرور خواسته می‌شود؛ خود ویدیو دانلود نمی‌شود).',
+      dlNote: 'دانلودها مستقیم و بدون تأیید وارد صف می‌شوند، چه یک ویدیو چه چندتا. چند دانلود هم‌زمان اجرا می‌شود و دانلود ناموفق با دلیلش قرمز نمایش داده می‌شود و قابل تلاش دوباره است. در اندروید برای همهٔ فایل‌ها دانلودر Tampermonkey استفاده می‌شود تا Firefox برای هر فایل سؤال نکند. ویدیوهای up.shahvani.com همیشه با Tampermonkey دانلود می‌شوند (پنجرهٔ اجازهٔ آن را یک‌بار تأیید کنید: «Always allow all domains»). فقط ویدیوهای همین صفحه قابل انتخاب هستند. حجم و مدت‌زمان خودکار پیدا می‌شود (فقط سرآیند فایل).',
       dlOffPage: 'در این صفحه نیست',
       dlStream: 'پلی‌لیست استریم: فایل مستقیم ندارد',
       dlNoLink: 'لینک قابل‌استفاده ندارد',
@@ -1098,6 +1127,29 @@
       dlChipSize: 'حجم فایل',
       stLoadAllBusy: 'بارگذاری هنوز ادامه دارد.',
       filteredAds: 'تبلیغات فیلترشده',
+      // v3.6.3
+      dlRetry: 'تلاش دوباره برای ناموفق‌ها ({n})',
+      dlNoteTitle: 'دانلود چگونه کار می‌کند',
+      stDlQueue: 'صف دانلود: {i} از {n} انجام شد، ناموفق: {f}',
+      secShortcuts: 'میان‌برهای صفحه‌کلید',
+      scEnable: 'فعال بودن میان‌برها',
+      scEnableD: 'میان‌بر Alt+Shift+L (باز و بسته کردن منو) همیشه کار می‌کند، حتی وقتی این گزینه خاموش است.',
+      scNote: 'حروف، کلید فیزیکی هستند: با کیبورد فارسی هم کار می‌کنند.',
+      scMenu: 'باز / بستن منو',
+      scDownloadTab: 'باز کردن بخش دانلود',
+      scToggleScript: 'روشن / خاموش کردن اسکریپت',
+      scRelease: 'آزادسازی',
+      scLoadAll: 'باز کردن و بارگذاری همه ویدیوها',
+      scPause: 'توقف همه رسانه‌ها',
+      scSelectAll: 'انتخاب همه ویدیوهای این صفحه',
+      scDeselectAll: 'لغو انتخاب همه',
+      scDownload: 'دانلود ویدیوهای انتخاب‌شده',
+      scCopy: 'کپی لینک ویدیوهای انتخاب‌شده',
+      scEmergency: 'توقف اضطراری روشن / خاموش',
+      scNowOn: 'اولترا لایت شهوانی: روشن',
+      scNowOff: 'اولترا لایت شهوانی: خاموش',
+      scSelected: '{n} ویدیو انتخاب شد.',
+      scDeselected: 'انتخاب‌ها پاک شد.',
     }
   };
 
@@ -1772,7 +1824,7 @@
       poster.alt = '';
       poster.loading = 'lazy';
       poster.decoding = 'async';
-      poster.addEventListener('load', () => storeThumb(thumbKey(entry), poster, poster.naturalWidth, poster.naturalHeight, 'poster'));
+      poster.addEventListener('load', () => storeThumb(thumbKey(entry), poster, poster.naturalWidth, poster.naturalHeight, 'poster', poster.currentSrc || poster.src));
       poster.src = entry.poster;
       button.prepend(poster);
     }
@@ -2160,6 +2212,7 @@
     const length = parseInt(header('content-length') || '0', 10);
     return {
       ok: status >= 200 && status < 300,
+      status,
       size: length > 0 ? length : 0,
       ranges: /bytes/i.test(header('accept-ranges') || ''),
       type: (header('content-type') || '').toLowerCase()
@@ -2173,6 +2226,26 @@
     if (signal.aborted) { handler(); return () => {}; }
     signal.addEventListener('abort', handler, { once: true });
     return () => signal.removeEventListener('abort', handler);
+  }
+
+  /**
+   * v3.6.3: a manager request that never answers (permission prompt waiting, host not allowed, hot-link filter) must not
+   * cost 8 s per video: after two timeouts in a row the manager is skipped for that host for 5 minutes
+   * (the page's own fetch / the browser's demuxer are still tried).
+   */
+  const gmHostHealth = new Map();   // host -> { n: timeouts in a row, at: time of the last one }
+  function hostOf(url) { try { return new URL(url, document.baseURI).host; } catch (_) { return ''; } }
+  function gmNoteTimeout(url) {
+    const host = hostOf(url);
+    const rec = gmHostHealth.get(host) || { n: 0, at: 0 };
+    rec.n++; rec.at = Date.now();
+    gmHostHealth.set(host, rec);
+    diagNote('gm-timeout', url, 'no answer from the manager (' + rec.n + ')');
+  }
+  function gmNoteOk(url) { gmHostHealth.delete(hostOf(url)); }
+  function gmHostBlocked(url) {
+    const rec = gmHostHealth.get(hostOf(url));
+    return !!(rec && rec.n >= 2 && Date.now() - rec.at < 300000);
   }
 
   function gmHead(url, signal) {
@@ -2190,9 +2263,9 @@
           url,
           headers: refererHeader(),
           timeout: PROBE_TIMEOUT_MS,
-          onload: r => finish(resolve, parseHead(r.status, name => rawHeader(r.responseHeaders, name))),
+          onload: r => { gmNoteOk(url); finish(resolve, parseHead(r.status, name => rawHeader(r.responseHeaders, name))); },
           onerror: () => finish(reject, new Error('HEAD request failed')),
-          ontimeout: () => finish(reject, new Error('HEAD timeout')),
+          ontimeout: () => { gmNoteTimeout(url); finish(reject, new Error('HEAD timeout')); },
           onabort: () => finish(reject, new DOMException('Aborted', 'AbortError'))
         });
       } catch (err) { finish(reject, err); }
@@ -2210,12 +2283,13 @@
    * through fetch for the same origin; each is the fallback of the other. null = nobody could tell.
    */
   async function headInfo(url, signal) {
-    const order = GM_FN.request ? (isCrossOrigin(url) ? [gmHead, fetchHead] : [fetchHead, gmHead]) : [fetchHead];
+    const useGm = !!GM_FN.request && !gmHostBlocked(url);
+    const order = useGm ? (isCrossOrigin(url) ? [gmHead, fetchHead] : [fetchHead, gmHead]) : [fetchHead];
     for (const attempt of order) {
       try {
         const info = await attempt(url, signal);
         if (info.ok) return info;
-        diagNote('head', url, 'HTTP status not ok');
+        diagNote('head', url, 'HEAD answered HTTP ' + info.status);
       } catch (err) {
         if (err && err.name === 'AbortError') throw err;
         diagNote('head', url, err);
@@ -2255,11 +2329,13 @@
           timeout: PROBE_TIMEOUT_MS,
           onreadystatechange: r => {
             if (settled || r.readyState !== 2 || r.status !== 200) return;
+            gmNoteOk(url);
             const head = info(r);                              // Range ignored: keep the headers, drop the body
             cancel();
             finish(resolve, { bytes: new Uint8Array(0), total: head.total, partial: false, type: head.type });
           },
           onload: r => {
+            gmNoteOk(url);
             if (r.status === 416) { finish(resolve, { bytes: new Uint8Array(0), total: info(r).total, partial: false, type: '' }); return; }
             if (r.status < 200 || r.status >= 300) { finish(reject, new Error('HTTP ' + r.status)); return; }
             const head = info(r);
@@ -2269,7 +2345,7 @@
             finish(resolve, { bytes, total: head.total, partial: r.status === 206, type: head.type });
           },
           onerror: () => finish(reject, new Error('request failed')),
-          ontimeout: () => finish(reject, new Error('timeout')),
+          ontimeout: () => { gmNoteTimeout(url); finish(reject, new Error('timeout')); },
           onabort: () => finish(reject, new DOMException('Aborted', 'AbortError'))
         });
       } catch (err) {
@@ -2309,7 +2385,7 @@
    * The manager is tried first for another origin (allowGm), the page's fetch is always the other option.
    */
   async function probeRange(url, start, length, signal, allowGm) {
-    const useGm = !!GM_FN.request && allowGm !== false;
+    const useGm = !!GM_FN.request && allowGm !== false && !gmHostBlocked(url);
     const order = useGm ? (isCrossOrigin(url) ? [gmRange, fetchRange] : [fetchRange, gmRange]) : [fetchRange];
     let lastError = null;
     for (const attempt of order) {
@@ -2344,6 +2420,7 @@
       };
       try {
         video = document.createElement('video');
+        unsafeVideos.add(video);   // v3.6.3: our own lock (preload -> 'none') must not apply to the probe element - this was why up.shahvani.com never gave a duration
         video.preload = 'metadata';
         video.muted = true;
         video.addEventListener('loadedmetadata', () => finish(video.duration), { once: true });
@@ -2367,7 +2444,7 @@
     const ctl = new AbortController();
     state.probeControllers.add(ctl);
     let timedOut = false;
-    const timer = window.setTimeout(() => { timedOut = true; ctl.abort(); }, PROBE_TIMEOUT_MS);
+    const timer = window.setTimeout(() => { timedOut = true; ctl.abort(); }, PROBE_TOTAL_MS);
     const result = { size: 0, duration: 0 };
     let stopped = false;
     try {
@@ -2376,8 +2453,7 @@
         result.size = head.size;
         if (/^(text\/|application\/(vnd\.apple\.mpegurl|x-mpegurl|dash))/.test(head.type)) result.size = 0;   // a playlist is not a video file
       }
-      const viaManager = !!GM_FN.request && isCrossOrigin(url);
-      const allowGm = !viaManager || !!(head && head.ranges);
+      const allowGm = true;   // v3.6.3: gmRange drops the body itself when the server ignores Range, so a blocked HEAD no longer blocks the size lookup
       try {
         const first = await probeRange(url, 0, PROBE_HEAD_BYTES, ctl.signal, allowGm);
         if (first.total > 0) result.size = first.total;
@@ -3065,7 +3141,8 @@
     return candidates;
   }
 
-  function releaseInactiveNow() {
+  function releaseInactiveNow(withToast) {
+    if (withToast === true && !releaseCandidates().length) { setStatus('stNoRelease', null, true); return; }
     loadAllRun++;          // a running "Unlock & Load All" stops here, so the two never fight each other
     loadAllBusy = false;
     let videosReleased = 0;
@@ -3076,7 +3153,7 @@
       else if (entry.kind === 'frame' && releaseFrameEntry(entry)) framesReleased++;
     }
 
-    setStatus('stReleased', { v: videosReleased, f: framesReleased });
+    setStatus('stReleased', { v: videosReleased, f: framesReleased }, withToast === true);
     scheduleUIUpdate();
   }
 
@@ -3851,6 +3928,7 @@
   const LOAD_ALL_HOLD_MS = 30000;     // v3.6.1: after Unlock & Load All the site cannot start playback for this long (or until the first tap on the page)
   const THUMB_MAX_SIDE = 240;         // longest side of a stored thumbnail (the whole picture, never cropped)
   const THUMB_MAX = 150;
+  const THUMB_VIDEO_BYTES = 3 * 1048576;   // v3.6.3: first bytes of a cross-origin video, used once to re-make an exportable thumbnail
   const THUMB_JPEG_QUALITY = 0.72;
   const ROW_FLUSH_MS = 120;           // rows are repainted at most this often
   const ROW_POLL_MS = 1500;           // while the Download tab is open: pick up new videos / decoded frames
@@ -3866,7 +3944,7 @@
   const selection = new Map();   // key -> { k, u, i, d, s }  (key, url, number, duration, size) - survives DOM changes
   const thumbCache = new Map();  // key -> { url?: data URL, canvas?: HTMLCanvasElement (tainted: memory only), kind: 'poster' | 'frame' }
   const dlInfo = new Map();      // key -> { duration, size, state: '' | 'run' | 'done' | 'fail', fails, retryAt }  (our own lookup + its retries)
-  const dlUI = { box: null, rows: new Map(), count: null, total: null, err: null, btnDl: null, btnCopy: null, area: null, empty: null };
+  const dlUI = { box: null, rows: new Map(), count: null, total: null, err: null, btnDl: null, btnCopy: null, area: null, empty: null, queue: null, btnRetry: null };
   const dlHydrated = new Set();  // keys whose IndexedDB lookup was started on this page
   const dlHydrateDone = new Set(); // ... and finished: the cache is always asked before the network
   const dlMetaSaved = new Set();
@@ -3877,11 +3955,18 @@
   let loadAllBusy = false;
   let loadAllRun = 0;            // bumped by Release: a running "Unlock & Load All" notices and stops
 
+  /** v3.6.3: the selection belongs to ONE page (address without #hash). Another page starts with an empty selection. */
+  function pageKey() {
+    try { return location.origin + location.pathname + location.search; } catch (_) { return ''; }
+  }
+  let selectionPage = pageKey();
+
   function loadSelection() {
     try {
       const raw = sessionStorage.getItem(SEL_KEY);
-      const list = raw ? JSON.parse(raw) : null;
-      if (!Array.isArray(list)) return;
+      const saved = raw ? JSON.parse(raw) : null;
+      if (!saved || Array.isArray(saved) || saved.p !== pageKey() || !Array.isArray(saved.list)) return;   // old format / another page: dropped
+      const list = saved.list;
       for (const item of list.slice(0, MAX_SELECTION)) {
         if (!item || typeof item.k !== 'string' || typeof item.u !== 'string' || !/^https?:/i.test(item.u)) continue;
         selection.set(item.k, { k: item.k, u: item.u, i: Number(item.i) || 0, d: Number(item.d) || 0, s: Number(item.s) || 0 });
@@ -3890,7 +3975,7 @@
   }
 
   function saveSelection() {
-    try { sessionStorage.setItem(SEL_KEY, JSON.stringify(Array.from(selection.values()))); } catch (_) {}
+    try { sessionStorage.setItem(SEL_KEY, JSON.stringify({ p: selectionPage, list: Array.from(selection.values()) })); } catch (_) {}
   }
 
   loadSelection();
@@ -3918,41 +4003,250 @@
 
   /* ---- thumbnails ---- */
 
+  /** The picture shrunk so that its longest side fits THUMB_MAX_SIDE (whole picture, never cropped). */
+  function scaledCanvas(source, sw, sh) {
+    const scale = Math.min(1, THUMB_MAX_SIDE / Math.max(sw, sh));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(sw * scale));
+    canvas.height = Math.max(1, Math.round(sh * scale));
+    canvas.getContext('2d').drawImage(source, 0, 0, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+
   /**
-   * Draws an already-loaded image / video frame into a small canvas (cover crop): no network, no pixel reads.
-   * The result is kept as a small JPEG (memory + IndexedDB). A canvas tainted by a cross-origin image cannot
-   * be exported, so it stays in memory only. A poster thumbnail is never replaced by a frame.
+   * v3.6.3: 'blank' = (nearly) transparent or black, 'ok', 'unknown' = tainted canvas (pixels cannot be read).
+   * A frame that is not painted yet (Firefox for Android hands out an empty surface) used to be saved as a black picture.
    */
-  function storeThumb(key, source, sw, sh, kind) {
-    if (!key || !(sw > 0 && sh > 0)) return;
-    const old = thumbCache.get(key);
-    if (old && old.kind === 'poster' && kind !== 'poster') return;
+  function canvasState(canvas) {
     try {
-      // the whole picture with its own proportions (v3.6.1: no more centre crop), shrunk so that the longest side fits
-      const scale = Math.min(1, THUMB_MAX_SIDE / Math.max(sw, sh));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(sw * scale));
-      canvas.height = Math.max(1, Math.round(sh * scale));
-      canvas.getContext('2d').drawImage(source, 0, 0, sw, sh, 0, 0, canvas.width, canvas.height);
+      const probe = document.createElement('canvas');
+      probe.width = 24; probe.height = 24;
+      const c = probe.getContext('2d', { willReadFrequently: true });
+      c.drawImage(canvas, 0, 0, 24, 24);
+      const d = c.getImageData(0, 0, 24, 24).data;
+      let alpha = 0, lum = 0, bright = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        alpha += d[i + 3];
+        const l = d[i] + d[i + 1] + d[i + 2];
+        lum += l;
+        if (l > 45) bright++;
+      }
+      if (alpha / 576 < 40) return 'blank';
+      if (lum / 576 / 3 < 4 && bright < 4) return 'blank';
+      return 'ok';
+    } catch (_) { return 'unknown'; }
+  }
+
+  function commitThumb(key, url, canvas, kind) {
+    thumbCache.delete(key);
+    thumbCache.set(key, { url, canvas: url ? null : canvas, kind });
+    while (thumbCache.size > THUMB_MAX) thumbCache.delete(thumbCache.keys().next().value);
+    if (url) idbSaveThumb(key, url, kind);
+    queueRowUpdate();
+  }
+
+  /**
+   * Draws an already-loaded image / video frame into a small canvas: no network. The result is kept as a small JPEG
+   * (memory + IndexedDB). v3.6.3: a blank / black result is refused (returns false, the caller tries again later), and a canvas
+   * tainted by a cross-origin picture (up.shahvani.com) - which cannot be exported - is re-made from bytes fetched through the
+   * manager, so it is cached in IndexedDB too and survives a reload. A poster thumbnail is never replaced by a frame.
+   * @returns {boolean} true when something usable was stored
+   */
+  function storeThumb(key, source, sw, sh, kind, origin) {
+    if (!key || !(sw > 0 && sh > 0)) return false;
+    const old = thumbCache.get(key);
+    if (old && old.kind === 'poster' && kind !== 'poster') return true;
+    try {
+      const canvas = scaledCanvas(source, sw, sh);
+      if (canvasState(canvas) === 'blank') return false;
       let url = '';
       try { url = canvas.toDataURL('image/jpeg', THUMB_JPEG_QUALITY); } catch (_) { url = ''; }
       if (url && !/^data:image\//.test(url)) url = '';
-      thumbCache.delete(key);
-      thumbCache.set(key, { url, canvas: url ? null : canvas, kind });
-      while (thumbCache.size > THUMB_MAX) thumbCache.delete(thumbCache.keys().next().value);
-      if (url) idbSaveThumb(key, url, kind);
-      queueRowUpdate();
-    } catch (_) {}
+      commitThumb(key, url, canvas, kind);
+      if (!url && origin) queueRescue(key, kind, origin);
+      return true;
+    } catch (_) { return false; }
+  }
+
+  /* ---- v3.6.3: persistent thumbnails for cross-origin pictures (tainted canvas cannot be exported) ---- */
+
+  const rescueTried = new Set();
+  const rescueQueue = [];
+  let rescueBusy = false;
+
+  function mimeOfVideo(url) {
+    const m = /\.([a-z0-9]{2,4})(?:$|\?)/i.exec(String(url));
+    const ext = m ? m[1].toLowerCase() : 'mp4';
+    return ({ webm: 'video/webm', mov: 'video/quicktime', ogv: 'video/ogg', ogg: 'video/ogg', mkv: 'video/x-matroska' })[ext] || 'video/mp4';
+  }
+
+  /** Bytes through the manager (no CORS limit). `bytes` > 0 = only the first bytes (Range); a server that ignores Range is dropped. */
+  function gmGetBlob(url, bytes) {
+    return new Promise((resolve, reject) => {
+      if (!GM_FN.request) { reject(new Error('no request API')); return; }
+      let req = null;
+      let settled = false;
+      let timer = 0;
+      const finish = (fn, value) => { if (settled) return; settled = true; window.clearTimeout(timer); fn(value); };
+      const abort = () => { try { if (req && typeof req.abort === 'function') req.abort(); } catch (_) {} };
+      timer = window.setTimeout(() => { abort(); gmNoteTimeout(url); finish(reject, new Error('timeout')); }, 20000);
+      const headers = refererHeader();
+      if (bytes > 0) headers.Range = 'bytes=0-' + (bytes - 1);
+      try {
+        req = GM_FN.request({
+          method: 'GET',
+          url,
+          headers,
+          responseType: 'blob',
+          timeout: 20000,
+          onreadystatechange: r => {
+            if (settled || r.readyState !== 2 || !(bytes > 0) || r.status !== 200) return;
+            const len = parseInt(rawHeader(r.responseHeaders, 'content-length') || '0', 10);
+            if (!(len > 0 && len <= bytes * 1.2)) { abort(); finish(reject, new Error('Range ignored')); }
+          },
+          onload: r => {
+            gmNoteOk(url);
+            if (r.status < 200 || r.status >= 300) { finish(reject, new Error('HTTP ' + r.status)); return; }
+            if (!r.response || !r.response.size) { finish(reject, new Error('empty answer')); return; }
+            finish(resolve, r.response);
+          },
+          onerror: () => finish(reject, new Error('request failed')),
+          ontimeout: () => { gmNoteTimeout(url); finish(reject, new Error('timeout')); },
+          onabort: () => finish(reject, new Error('aborted'))
+        });
+      } catch (err) { finish(reject, err); }
+    });
+  }
+
+  async function fetchBlobSimple(url) {
+    if (!NATIVE.fetch) throw new Error('no fetch');
+    const res = await NATIVE.fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.blob();
+  }
+
+  async function blobImageToCanvas(blob) {
+    let bmp = null;
+    try { bmp = await createImageBitmap(blob); } catch (_) { bmp = null; }
+    if (bmp) {
+      const c = scaledCanvas(bmp, bmp.width, bmp.height);
+      try { bmp.close(); } catch (_) {}
+      return c;
+    }
+    return new Promise(resolve => {
+      let href = '';
+      try { href = URL.createObjectURL(blob); } catch (_) { resolve(null); return; }
+      const img = new Image();
+      img.onload = () => { let c = null; try { c = scaledCanvas(img, img.naturalWidth, img.naturalHeight); } catch (_) {} try { URL.revokeObjectURL(href); } catch (_) {} resolve(c); };
+      img.onerror = () => { try { URL.revokeObjectURL(href); } catch (_) {} resolve(null); };
+      img.src = href;
+    });
+  }
+
+  /** A frame a little into the video, from the first bytes held in a same-origin blob (readable canvas). Faststart (moov first) files only. */
+  function blobVideoToCanvas(blob, origin) {
+    return new Promise(resolve => {
+      let href = '';
+      let video = null;
+      let done = false;
+      let timer = 0;
+      const finish = canvas => {
+        if (done) return;
+        done = true;
+        window.clearTimeout(timer);
+        try { video.removeAttribute('src'); NATIVE.load.call(video); } catch (_) {}
+        try { URL.revokeObjectURL(href); } catch (_) {}
+        resolve(canvas);
+      };
+      try {
+        const type = /^video\//.test(blob.type || '') ? blob.type : mimeOfVideo(origin);
+        href = URL.createObjectURL(new Blob([blob], { type }));
+        video = document.createElement('video');
+        unsafeVideos.add(video);          // our own lock must not touch this element
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = 'auto';
+        let tries = 0;
+        const grab = () => {
+          if (!(video.videoWidth > 0)) return false;
+          const c = scaledCanvas(video, video.videoWidth, video.videoHeight);
+          if (canvasState(c) === 'blank') return false;
+          finish(c);
+          return true;
+        };
+        video.addEventListener('loadeddata', () => {
+          const d = Number.isFinite(video.duration) ? video.duration : 0;
+          try { video.currentTime = Math.max(0.2, Math.min(1.5, d * 0.05)); } catch (_) { if (!grab()) finish(null); }
+        }, { once: true });
+        video.addEventListener('seeked', () => {
+          if (grab()) return;
+          if (++tries > 3) { finish(null); return; }
+          try { video.currentTime = video.currentTime + 1; } catch (_) { finish(null); }
+        });
+        video.addEventListener('error', () => finish(null), { once: true });
+        timer = window.setTimeout(() => finish(null), 15000);
+        video.src = href;
+      } catch (_) { finish(null); }
+    });
+  }
+
+  async function rescueJob(job) {
+    const old = thumbCache.get(job.key);
+    if (old && old.url) return;                                       // a persistent one exists already
+    if (old && old.kind === 'poster' && job.kind !== 'poster') return;
+    let canvas = null;
+    if (job.kind === 'poster') {
+      const blob = isCrossOrigin(job.origin) ? await gmGetBlob(job.origin, 0) : await fetchBlobSimple(job.origin);
+      canvas = await blobImageToCanvas(blob);
+    } else {
+      const blob = await gmGetBlob(job.origin, THUMB_VIDEO_BYTES);
+      canvas = await blobVideoToCanvas(blob, job.origin);
+    }
+    if (!canvas || canvasState(canvas) === 'blank') { diagNote('thumb', job.origin, 'no usable picture'); return; }
+    let url = '';
+    try { url = canvas.toDataURL('image/jpeg', THUMB_JPEG_QUALITY); } catch (_) { url = ''; }
+    if (!url || !/^data:image\//.test(url)) return;
+    const current = thumbCache.get(job.key);
+    if (current && current.url) return;
+    if (current && current.kind === 'poster' && job.kind !== 'poster') return;
+    commitThumb(job.key, url, null, job.kind);
+  }
+
+  function pumpRescue() {
+    if (rescueBusy || !rescueQueue.length) return;
+    const job = rescueQueue.shift();
+    rescueBusy = true;
+    rescueJob(job).catch(err => diagNote('thumb', job.origin, err)).then(() => {
+      rescueBusy = false;
+      window.setTimeout(pumpRescue, 200);
+    });
+  }
+
+  function queueRescue(key, kind, origin) {
+    if (!key || !origin || !/^https?:/i.test(origin)) return;
+    if (isCrossOrigin(origin) && (!GM_FN.request || gmHostBlocked(origin))) return;
+    const tag = kind + ':' + key;
+    if (rescueTried.has(tag)) return;
+    rescueTried.add(tag);
+    rescueQueue.push({ key, kind, origin });
+    pumpRescue();
   }
 
   /** A decoded frame of any <video> of the page (locked-and-opened, opened by the site, or the script is Off). */
+  const blankTries = new WeakMap();
   function captureAny(video, entry) {
-    if (!(video instanceof HTMLVideoElement) || video.readyState < 2 || !(video.videoWidth > 0)) return;
+    if (!(video instanceof HTMLVideoElement) || video.readyState < 2 || !(video.videoWidth > 0)) return false;
     const key = keyOfVideo(video, entry || videoStates.get(video));
-    if (!key) return;
+    if (!key) return false;
     const old = thumbCache.get(key);
-    if (old && old.kind === 'poster') return;
-    storeThumb(key, video, video.videoWidth, video.videoHeight, 'frame');
+    if (old && old.kind === 'poster') return true;
+    const ok = storeThumb(key, video, video.videoWidth, video.videoHeight, 'frame', videoURLOf(video, entry || videoStates.get(video)));
+    if (!ok) {                                   // nothing painted yet (Android): look again a little later, a few times
+      const n = (blankTries.get(video) || 0) + 1;
+      blankTries.set(video, n);
+      if (n <= 6) window.setTimeout(() => captureAny(video, entry), 600 * n);
+    }
+    return ok;
   }
 
   function captureFrame(entry) {
@@ -3979,9 +4273,14 @@
     const video = event.target;
     if (!(video instanceof HTMLVideoElement)) return;
     if (event.type === 'loadeddata') captureAny(video);
+    else if (event.type === 'playing' || event.type === 'seeked') {     // v3.6.3: a frame that was blank at 'loadeddata' is caught here
+      const key = keyOfVideo(video, videoStates.get(video));
+      if (key && !thumbCache.has(key)) captureAny(video);
+      return;
+    }
     noteVideoDuration(video);
   }
-  for (const type of ['loadeddata', 'loadedmetadata', 'durationchange']) document.addEventListener(type, onMediaEvent, true);
+  for (const type of ['loadeddata', 'loadedmetadata', 'durationchange', 'playing', 'seeked']) document.addEventListener(type, onMediaEvent, true);
 
   /** Frames / durations of videos that were already decoded before we looked (the page opened them, or the script is Off). */
   function sweepVideos() {
@@ -4071,15 +4370,32 @@
         || (Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0)
         || (known ? known.duration : 0) || (snap ? snap.d : 0);
       const size = (entry && entry.videoSize > 0 ? entry.videoSize : 0) || (known ? known.size : 0) || (snap ? snap.s : 0);
-      rows.push({ key, url, index: n, duration, size, live: true });
+      let poster = '';
+      try {
+        const raw = (entry && entry.poster) || el.getAttribute('poster') || '';
+        if (raw && isUsableURL(raw) && !isBlobURL(raw)) poster = new URL(raw, document.baseURI).href;
+      } catch (_) {}
+      rows.push({ key, url, index: n, duration, size, live: true, poster });
     }
-    for (const snap of selection.values()) {
-      if (!live.has(snap.k)) rows.push({ key: snap.k, url: snap.u, index: snap.i, duration: snap.d, size: snap.s, live: false });
-    }
+    // v3.6.3: only videos of THIS page are listed, selectable, downloadable and copyable (no rows left over from other pages)
     return rows;
   }
 
+  /** Drops selected videos that are not on this page (page changed, video removed). Waits until the page is parsed. */
+  function pruneSelection() {
+    const here = pageKey();
+    if (here !== selectionPage) { selectionPage = here; if (selection.size) { selection.clear(); saveSelection(); } dlHydrated.clear(); return; }
+    if (!selection.size || document.readyState === 'loading') return;
+    const live = new Set(downloadRows().map(rec => rec.key));
+    let changed = false;
+    for (const key of Array.from(selection.keys())) {
+      if (!live.has(key)) { selection.delete(key); changed = true; }
+    }
+    if (changed) saveSelection();
+  }
+
   function selectedRecs() {
+    pruneSelection();
     return downloadRows().filter(rec => selection.has(rec.key));
   }
 
@@ -4095,6 +4411,7 @@
   }
 
   function tabLabel(id, key) {
+    if (id === 'download') pruneSelection();
     return id === 'download' && selection.size ? t(key) + ' (' + selection.size + ')' : t(key);
   }
 
@@ -4128,6 +4445,7 @@
   }
 
   function refreshDownloadUI() {
+    pruneSelection();
     const ui = state.ui;
     if (ui) {
       const tab = ui.tabs.querySelector('[data-tab="download"]');
@@ -4142,6 +4460,17 @@
       }
       if (dlUI.btnDl) dlUI.btnDl.refresh();
       if (dlUI.btnCopy) dlUI.btnCopy.refresh();
+      if (dlUI.queue) {
+        const line = dlStatusLine();
+        dlUI.queue.textContent = line;
+        dlUI.queue.style.display = line ? '' : 'none';
+      }
+      if (dlUI.btnRetry) {
+        const n = dlQ.failed.length;
+        const show = n > 0 && !dlQ.running && !dlQ.pending.length;
+        dlUI.btnRetry.style.display = show ? '' : 'none';
+        if (show) dlUI.btnRetry.textContent = t('dlRetry', { n });
+      }
     }
   }
 
@@ -4162,8 +4491,9 @@
   }
 
   function setAllSelected(on) {
+    pruneSelection();
     if (on) {
-      for (const ref of dlUI.rows.values()) if (!selectRec(ref.rec, true, true)) break;
+      for (const rec of downloadRows()) if (!selectRec(rec, true, true)) break;
     } else {
       selection.clear();
     }
@@ -4220,26 +4550,32 @@
     openInTab(list[0]);
   }
 
-  /** Stage 1: the manager's own downloader. { ok } | { ok: false, err } | { ok: true, running: true } (silent for DL_STALL_MS). */
-  function gmDownloadStage(url, name) {
+  const DL_CONCURRENCY = IS_ANDROID ? 2 : 3;   // manager downloads running at the same time (the browser keeps its own queue)
+  const DL_FIRST_ANSWER_MS = 25000;            // a manager that says nothing at all for this long is assumed to be running the file
+  const dlQ = { pending: [], running: 0, total: 0, done: 0, skipped: 0, failed: [], active: new Set(), tabLinks: [], anchor: Promise.resolve() };
+
+  /** Stage 1: the manager's own downloader. { ok } | { ok: false, err } | { ok: true, running: true } (silent for a long time). */
+  function gmDownloadStage(url, name, withHeaders) {
     return new Promise(resolve => {
       let settled = false;
       let watchdog = 0;
+      let got = false;
       const done = result => { if (settled) return; settled = true; window.clearTimeout(watchdog); resolve(result); };
-      const arm = () => { window.clearTimeout(watchdog); watchdog = window.setTimeout(() => done({ ok: true, running: true }), DL_STALL_MS); };
+      const arm = () => { window.clearTimeout(watchdog); watchdog = window.setTimeout(() => done({ ok: true, running: true }), got ? DL_STALL_MS : DL_FIRST_ANSWER_MS); };
       try {
         arm();
-        const handle = GM_FN.download({
+        const details = {
           url,
           name,
-          headers: refererHeader(),
           saveAs: false,
           conflictAction: 'uniquify',
           onload: () => done({ ok: true }),
           onerror: e => done({ ok: false, err: errCode(e) }),
           ontimeout: () => done({ ok: false, err: 'timeout' }),
-          onprogress: arm
-        });
+          onprogress: () => { got = true; arm(); }
+        };
+        if (withHeaders) details.headers = refererHeader();
+        const handle = GM_FN.download(details);
         if (handle && typeof handle.then === 'function') handle.then(() => done({ ok: true }), e => done({ ok: false, err: errCode(e) }));
       } catch (err) {
         done({ ok: false, err: errCode(err) });
@@ -4248,9 +4584,8 @@
   }
 
   /**
-   * Stage 2 (the manager's downloader failed): the manager fetches the file as a blob and Firefox saves it from a
-   * same-origin blob link - Firefox's own download queue again. The whole file is held in memory meanwhile,
-   * so it is skipped above BLOB_MAX (200 MB on Android, 800 MB elsewhere).
+   * Stage 2 (the manager's downloader failed): the manager fetches the file as a blob and the browser saves it from a
+   * same-origin blob link. The whole file is held in memory meanwhile, so it is skipped above BLOB_MAX.
    */
   function gmBlobStage(url, name, size) {
     return new Promise(resolve => {
@@ -4259,10 +4594,15 @@
       let settled = false;
       let watchdog = 0;
       let handle = null;
+      let got = false;
       const done = result => { if (settled) return; settled = true; window.clearTimeout(watchdog); resolve(result); };
       const arm = () => {
         window.clearTimeout(watchdog);
-        watchdog = window.setTimeout(() => { try { if (handle && handle.abort) handle.abort(); } catch (_) {} done({ ok: false, err: 'no progress' }); }, DL_STALL_MS);
+        watchdog = window.setTimeout(() => {
+          try { if (handle && handle.abort) handle.abort(); } catch (_) {}
+          if (!got) gmNoteTimeout(url);
+          done({ ok: false, err: got ? 'no progress' : 'no answer (is Tampermonkey waiting for a permission?)' });
+        }, got ? DL_STALL_MS : DL_FIRST_ANSWER_MS);
       };
       try {
         arm();
@@ -4271,7 +4611,8 @@
           url,
           headers: refererHeader(),
           responseType: 'blob',
-          onprogress: arm,
+          onreadystatechange: () => { got = true; arm(); },
+          onprogress: () => { got = true; arm(); },
           onload: r => {
             const blob = r.response;
             if (r.status < 200 || r.status >= 300) { done({ ok: false, err: 'HTTP ' + r.status }); return; }
@@ -4293,68 +4634,136 @@
     });
   }
 
-  /** One video of another origin (up.shahvani.com): manager download -> blob download -> link. Resolves true when a download started. */
-  async function runGmJob(job, i, n) {
-    const name = fileNameOf(job.url);
-    const notes = [];
-    if (GM_FN.download && gmMode() !== 'disabled') {
-      setStatus('stDlGmStart', { i, n, name });
-      const first = await gmDownloadStage(job.url, name);
-      if (first.ok) { setStatus(first.running ? 'stDlGmRunning' : 'stDlGmDone', { name }, true); return true; }
-      notes.push('Tampermonkey: ' + first.err);
-    } else {
-      notes.push(GM_FN.download ? 'Tampermonkey downloads are disabled (Settings > Downloads)' : 'no Tampermonkey download');
+  /** Stage 3 (v3.6.3): the page's own fetch - only works when the other host sends CORS headers. */
+  async function fetchBlobStage(url, name, size) {
+    if (!NATIVE.fetch) return { ok: false, err: 'no fetch' };
+    if (size > BLOB_MAX) return { ok: false, err: 'too big for the memory fallback (' + formatSize(size) + ')' };
+    try {
+      const res = await NATIVE.fetch(url, { mode: 'cors', credentials: 'omit' });
+      if (!res.ok) return { ok: false, err: 'page fetch: HTTP ' + res.status };
+      const blob = await res.blob();
+      if (!blob.size) return { ok: false, err: 'page fetch: empty answer' };
+      if (/^text\/|json|html/i.test(blob.type || '')) return { ok: false, err: 'page fetch: not a video (' + blob.type + ')' };
+      const href = URL.createObjectURL(blob);
+      clickAnchor(href, { download: name });
+      window.setTimeout(() => { try { URL.revokeObjectURL(href); } catch (_) {} }, 120000);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, err: 'page fetch: ' + errCode(err) };
     }
-    if (GM_FN.request) {
-      setStatus('stDlBlob', { name });
-      const size = (dlInfo.get(job.key) && dlInfo.get(job.key).size) || (selection.get(job.key) && selection.get(job.key).s) || 0;
-      const second = await gmBlobStage(job.url, name, size);
-      if (second.ok) { setStatus('stDlGmDone', { name }, true); return true; }
-      notes.push('fallback: ' + second.err);
-    }
-    dlReport(name + ' - ' + notes.join(' | '));
-    return false;
+  }
+
+  /** One plain <a download> click, serialised: clicks are spaced out so the browser (Firefox for Android in particular) does not drop any. */
+  function nativeClick(url) {
+    const gap = IS_ANDROID ? 1200 : DOWNLOAD_GAP_MS;
+    const run = dlQ.anchor.then(() => { triggerDownload(url); return sleepMs(gap); });
+    dlQ.anchor = run.catch(() => {});
+    return run;
   }
 
   /**
-   * Same origin: Firefox's own download (plain link, 500 ms apart). Other origin (up.shahvani.com): the manager,
-   * one video at a time (parallel downloads of big files would exhaust memory), with the fallbacks above.
+   * One job. Same origin on desktop: Firefox's own download (plain link). Everything else goes through the manager:
+   *   manager downloader (with Referer) -> again without custom headers -> manager blob -> page fetch blob -> failed.
+   * On Android the manager is also used for same-origin files: its downloader starts the file straight away, while a plain
+   * link makes Firefox ask for every single file.
+   */
+  async function runDownloadJob(job) {
+    const name = fileNameOf(job.url);
+    const notes = [];
+    const gmDl = !!GM_FN.download && gmMode() !== 'disabled';
+    if (job.mode === 'tab') { dlQ.tabLinks.push(job.url); return { ok: false, name, err: 'no Tampermonkey download (link copied)' }; }
+    if (job.mode === 'native' && !(IS_ANDROID && gmDl)) { await nativeClick(job.url); return { ok: true, name }; }
+
+    if (gmDl) {
+      setStatus('stDlGmStart', { i: dlQ.done + dlQ.failed.length + 1, n: dlQ.total, name });
+      let first = await gmDownloadStage(job.url, name, true);
+      if (!first.ok) { notes.push('Tampermonkey: ' + first.err); first = await gmDownloadStage(job.url, name, false); if (!first.ok) notes.push('Tampermonkey (no headers): ' + first.err); }
+      if (first.ok) { if (first.running) setStatus('stDlGmRunning', { name }); return { ok: true, name }; }
+    } else {
+      notes.push(GM_FN.download ? 'Tampermonkey downloads are disabled (Settings > Downloads)' : 'no Tampermonkey download');
+    }
+    if (job.mode === 'native') { await nativeClick(job.url); return { ok: true, name }; }   // same origin: the plain link is the last option
+
+    const size = (dlInfo.get(job.key) && dlInfo.get(job.key).size) || (selection.get(job.key) && selection.get(job.key).s) || 0;
+    if (GM_FN.request) {
+      setStatus('stDlBlob', { name });
+      const second = await gmBlobStage(job.url, name, size);
+      if (second.ok) return { ok: true, name };
+      notes.push('fallback: ' + second.err);
+    }
+    const third = await fetchBlobStage(job.url, name, size);
+    if (third.ok) return { ok: true, name };
+    notes.push(third.err);
+    return { ok: false, name, err: notes.join(' | ') };
+  }
+
+  function dlStatusLine() {
+    return dlQ.total ? t('stDlQueue', { i: dlQ.done + dlQ.failed.length, n: dlQ.total, f: dlQ.failed.length }) : '';
+  }
+
+  function dlFinish() {
+    const failed = dlQ.failed.slice();
+    const done = dlQ.done;
+    const skipped = dlQ.skipped;
+    dlBusy = false;
+    if (failed.length) {
+      const links = failed.map(item => item.job.url);
+      copyText(links.join('\n')).catch(() => {});
+      if (dlQ.tabLinks.length) openInTab(dlQ.tabLinks[0]);
+      dlReport(failed.slice(0, 4).map(item => item.name + ' - ' + item.err).join('\n') + (failed.length > 4 ? '\n+' + (failed.length - 4) : ''));
+      setStatus('stDlSentFailed', { n: done, f: failed.length, m: skipped }, true);
+    } else {
+      setStatus('stDlSent', { n: done, m: skipped }, true);
+    }
+    dlQ.total = 0; dlQ.done = 0; dlQ.skipped = 0; dlQ.tabLinks = [];
+    refreshDownloadUI();
+  }
+
+  function dlPump() {
+    while (dlQ.running < DL_CONCURRENCY && dlQ.pending.length) {
+      const job = dlQ.pending.shift();
+      dlQ.running++;
+      runDownloadJob(job).catch(err => ({ ok: false, name: fileNameOf(job.url), err: errCode(err) })).then(res => {
+        dlQ.running--;
+        dlQ.active.delete(job.url);
+        if (res.ok) dlQ.done++;
+        else { dlQ.failed.push({ job, name: res.name, err: res.err }); diagNote('download', job.url, res.err); }
+        if (dlQ.running === 0 && !dlQ.pending.length) dlFinish();
+        else { setStatus('stDlQueue', { i: dlQ.done + dlQ.failed.length, n: dlQ.total, f: dlQ.failed.length }); dlPump(); }
+      });
+    }
+  }
+
+  /**
+   * v3.6.3: straight into the queue - no confirmation, one video or many. Several manager downloads run at once
+   * (DL_CONCURRENCY); anything added while a batch is running joins that batch. Every video ends as started or failed:
+   * failures are listed, their links copied, and "Retry failed" runs them again.
    */
   function downloadRecs(recs) {
-    if (dlBusy) { setStatus('stDlBusy', null, true); return; }
     const jobs = [];
     let skipped = 0;
     for (const rec of recs) {
       const info = linkInfo(rec.url);
       if (!info.ok) skipped++;
-      else if (!jobs.some(job => job.url === info.url)) jobs.push({ url: info.url, mode: info.mode, key: rec.key });
+      else if (!dlQ.active.has(info.url) && !jobs.some(job => job.url === info.url)) jobs.push({ url: info.url, mode: info.mode, key: rec.key });
     }
-    if (!jobs.length) { setStatus('stDlUnavailable', { m: skipped }, true); return; }
+    if (!jobs.length) { setStatus(recs.length && !skipped ? 'stDlBusy' : 'stDlUnavailable', { m: skipped }, true); return; }
 
+    if (!dlQ.running && !dlQ.pending.length) { dlQ.failed = []; dlReport(''); }
     dlBusy = true;
-    dlReport('');
-    (async () => {
-      let started = 0;
-      let failed = 0;
-      const links = [];
-      for (let i = 0; i < jobs.length; i++) {
-        const job = jobs[i];
-        if (job.mode === 'native') {
-          triggerDownload(job.url);
-          started++;
-          if (i < jobs.length - 1) { setStatus('stDlSending', { i: i + 1, n: jobs.length }); await sleepMs(DOWNLOAD_GAP_MS); }
-        } else if (job.mode === 'gm') {
-          if (await runGmJob(job, i + 1, jobs.length)) started++; else { failed++; links.push(job.url); }
-        } else {
-          links.push(job.url);                                    // no manager at all
-          failed++;
-        }
-      }
-      if (links.length) linkFallback(links);
-      dlBusy = false;
-      if (failed) setStatus('stDlSentFailed', { n: started, f: failed, m: skipped }, true);
-      else setStatus('stDlSent', { n: started, m: skipped }, true);
-    })().catch(() => { dlBusy = false; });
+    dlQ.skipped += skipped;
+    dlQ.total += jobs.length;
+    for (const job of jobs) { dlQ.active.add(job.url); dlQ.pending.push(job); }
+    setStatus('stDlQueue', { i: dlQ.done + dlQ.failed.length, n: dlQ.total, f: dlQ.failed.length });
+    dlPump();
+    refreshDownloadUI();
+  }
+
+  function retryFailed() {
+    if (dlQ.running || dlQ.pending.length || !dlQ.failed.length) return;
+    const recs = dlQ.failed.map(item => ({ key: item.job.key, url: item.job.url }));
+    dlQ.failed = [];
+    downloadRecs(recs);
   }
 
   function showManualCopy(text) {
@@ -4635,11 +5044,14 @@
   /** Repaints the open list in place: new thumbnails / durations / sizes, videos that appeared or left. */
   function refreshRows() {
     if (!dlActive()) return;
+    pruneSelection();
     const rows = downloadRows();
     hydrateRows(rows);
     const seen = new Set();
     for (const rec of rows) {
       seen.add(rec.key);
+      // v3.6.3: a row without a thumbnail whose video has a poster gets it (small picture, cached) - no need to open the video
+      if (rec.poster && dlHydrateDone.has(rec.key) && !thumbCache.has(rec.key)) queueRescue(rec.key, 'poster', rec.poster);
       const ref = dlUI.rows.get(rec.key);
       if (!ref) { insertRow(rec); continue; }
       if (ref.rec.live !== rec.live || ref.rec.url !== rec.url) {      // left the page / source changed: rebuild this row only
@@ -4680,32 +5092,38 @@
   function buildDownload() {
     const f = document.createDocumentFragment();
     sweepVideos();
+    pruneSelection();
     const rows = downloadRows();
     dlUI.rows = new Map();
     for (const rec of rows) if (selection.has(rec.key)) selectRec(rec, true, true);   // refresh snapshots (duration / size)
 
     dlUI.count = h('b', { class: 'dlcount', text: t('dlSelectedCount', { n: selection.size, m: rows.length }) });
     dlUI.total = h('div', { class: 'dlsum' });
+    dlUI.queue = h('div', { class: 'dlsum dlq' });
+    dlUI.queue.style.display = 'none';
     dlUI.err = h('div', { class: 'note dlerr', role: 'alert' });
     dlUI.err.style.display = 'none';
     dlUI.btnDl = confirmButton(() => t('dlDownload', { n: selection.size }), () => {
-      const n = selection.size;
-      if (!n) { setStatus('stDlNone', null, true); return null; }
-      return n > DOWNLOAD_CONFIRM_OVER ? t('dlConfirm', { n }) : false;
+      if (!selection.size) { setStatus('stDlNone', null, true); return null; }
+      return false;                                  // v3.6.3: no second tap - straight into the download queue
     }, () => downloadRecs(selectedRecs()), 'p');
     dlUI.btnCopy = confirmButton(() => t('dlCopy', { n: selection.size }), () => {
       if (!selection.size) { setStatus('stDlNone', null, true); return null; }
       return false;
     }, () => copyRecs(selectedRecs()));
+    dlUI.btnRetry = h('button', { class: 'btn', type: 'button', text: t('dlRetry', { n: 0 }), onclick: retryFailed });
+    dlUI.btnRetry.style.display = 'none';
     dlUI.area = h('textarea', { dir: 'ltr', spellcheck: 'false', readonly: '', hidden: '' });
 
-    f.append(section(t('tabDownload'), h('div', { class: 'pad' },
-      dlUI.count, dlUI.total,
-      h('div', { class: 'two' },
+    // v3.6.3: the controls stay at the top while the list scrolls (phones: no scrolling back up to reach Download)
+    f.append(h('div', { class: 'dlbar' },
+      h('div', { class: 'dlhead' }, dlUI.count, dlUI.total, dlUI.queue),
+      h('div', { class: 'dlbtns' },
         h('button', { class: 'btn', type: 'button', text: t('dlSelectAll'), onclick: () => setAllSelected(true) }),
-        h('button', { class: 'btn', type: 'button', text: t('dlDeselectAll'), onclick: () => setAllSelected(false) })),
-      dlUI.btnDl, dlUI.btnCopy, dlUI.err, dlUI.area,
-      h('div', { class: 'note', text: t('dlNote') }))));
+        h('button', { class: 'btn', type: 'button', text: t('dlDeselectAll'), onclick: () => setAllSelected(false) }),
+        dlUI.btnDl, dlUI.btnCopy),
+      dlUI.btnRetry, dlUI.err, dlUI.area));
+    f.append(h('details', { class: 'dlnote' }, h('summary', { text: t('dlNoteTitle') }), h('div', { class: 'note', text: t('dlNote') })));
 
     dlUI.box = h('div', { class: 'dlbox' });
     dlUI.empty = h('div', { class: 'note', text: t('dlEmpty') });
@@ -4887,6 +5305,21 @@
     .dlth canvas, .dlth img { display: block; width: 100%; height: auto; max-height: 150px; object-fit: contain;
       pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-user-drag: none; }
     @media (max-width: 380px) { .dlact { flex-direction: column; } }
+    /* v3.6.3: sticky control bar + bigger touch targets */
+    .dlbar { position: sticky; top: -4px; z-index: 3; display: flex; flex-direction: column; gap: 8px; padding: 8px 8px 10px; margin: 0 -2px;
+      background: var(--bg2); border: 1px solid var(--bd); border-radius: 16px; box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+    .dlhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+    .dlbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .dlbtns .btn { padding: 11px 8px; font-size: .94em; }
+    .dlbtns .btn.p { grid-column: 1 / -1; padding: 14px 8px; font-size: 1.02em; }
+    .dlq { color: var(--ac); }
+    details.dlnote { background: var(--card); border: 1px solid var(--bd); border-radius: 14px; padding: 4px 10px; }
+    details.dlnote > summary { cursor: pointer; font-weight: 700; font-size: .84em; color: var(--mut); padding: 8px 2px; }
+    .dlrow { padding: 11px 4px; }
+    @media (pointer: coarse) { .ib { width: 44px; height: 44px; } .dlrow .cb { width: 30px; height: 30px; } .dlrow { gap: 12px; } }
+    .kbrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 8px; border-top: 1px solid var(--bd); }
+    .kbrow:first-child { border-top: 0; }
+    .kbrow kbd { font: 700 .86em ui-monospace, Menlo, monospace; padding: 3px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--bd); white-space: nowrap; direction: ltr; }
     .dlmeta { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0; }
     .dlchip { font-size: .82em; font-variant-numeric: tabular-nums; padding: 1px 8px; border-radius: 999px;
       background: var(--card); border: 1px solid var(--bd); }
@@ -5259,6 +5692,7 @@
     const f = document.createDocumentFragment();
     const area = h('textarea', { dir: 'ltr', spellcheck: 'false', placeholder: t('jsonHint') });
 
+    f.append(buildShortcuts());
     f.append(section(t('secBackup'), h('div', { class: 'pad' }, area,
       h('div', { class: 'two' },
         h('button', { class: 'btn', type: 'button', text: t('exportB'), onclick: () => { area.value = JSON.stringify(settings, null, 1); area.select(); } }),
@@ -5417,15 +5851,85 @@
 
     document.documentElement.appendChild(host);
     renderAll();
+  }
 
+  /* ======================================================================
+   * 16b. Keyboard shortcuts (v3.6.3) - Alt+Shift+<key>. They work whether or not the menu is open
+   *      and use the physical key (event.code), so they work with the Persian layout too.
+   * ==================================================================== */
+
+  function openTab(id) {
+    if (!state.ui) return;
+    if (state.open && state.activeTab === id) { toggleSheet(false); return; }
+    state.activeTab = id;
+    if (state.open) { renderAll(); state.ui.body.scrollTop = 0; } else toggleSheet(true);
+  }
+
+  function toggleScript() {
+    setOpt('enabled', !settings.enabled);
+    toast(t(settings.enabled ? 'scNowOn' : 'scNowOff'));
+    if (state.open) renderAll(); else scheduleUIUpdate();
+  }
+
+  function shortcutSelect(on) {
+    pruneSelection();
+    if (!downloadRows().length) { setStatus('dlEmpty', null, true); return; }
+    setAllSelected(on);
+    setStatus(on ? 'scSelected' : 'scDeselected', { n: selection.size }, true);
+  }
+
+  function shortcutDownload() {
+    const recs = selectedRecs();
+    if (!recs.length) { setStatus('stDlNone', null, true); return; }
+    downloadRecs(recs);
+  }
+
+  function shortcutCopy() {
+    const recs = selectedRecs();
+    if (!recs.length) { setStatus('stDlNone', null, true); return; }
+    copyRecs(recs);
+  }
+
+  function shortcutEmergency() {
+    setEmergency(!state.emergency);
+    if (state.open) renderAll();
+  }
+
+  // [physical key, letter shown, label key, action, always works (even when shortcuts are switched off)]
+  const SHORTCUTS = [
+    ['KeyL', 'L', 'scMenu', () => toggleSheet(), true],
+    ['KeyD', 'D', 'scDownloadTab', () => openTab('download')],
+    ['KeyE', 'E', 'scToggleScript', toggleScript],
+    ['KeyR', 'R', 'scRelease', () => releaseInactiveNow(true)],
+    ['KeyU', 'U', 'scLoadAll', loadAllVideos],
+    ['KeyP', 'P', 'scPause', pauseAllMedia],
+    ['KeyA', 'A', 'scSelectAll', () => shortcutSelect(true)],
+    ['KeyN', 'N', 'scDeselectAll', () => shortcutSelect(false)],
+    ['KeyG', 'G', 'scDownload', shortcutDownload],
+    ['KeyC', 'C', 'scCopy', shortcutCopy],
+    ['KeyX', 'X', 'scEmergency', shortcutEmergency]
+  ];
+
+  function installShortcuts() {
+    if (!IS_TOP) return;
     window.addEventListener('keydown', event => {
-      if (event.altKey && event.shiftKey && (event.key === 'L' || event.key === 'l')) {
-        event.preventDefault();
-        toggleSheet();
-      } else if (event.key === 'Escape' && state.open) {
-        toggleSheet(false);
-      }
+      if (event.key === 'Escape' && state.open) { toggleSheet(false); return; }
+      if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.repeat) return;
+      const code = event.code || (/^[a-z]$/i.test(event.key || '') ? 'Key' + event.key.toUpperCase() : '');
+      const item = SHORTCUTS.find(entry => entry[0] === code);
+      if (!item || (!settings.shortcuts && !item[4])) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      try { item[3](); } catch (err) { diagNote('shortcut', '', err); }
     }, true);
+  }
+
+  function buildShortcuts() {
+    const rows = SHORTCUTS.map(item => h('div', { class: 'kbrow' }, h('span', { text: t(item[2]) }), h('kbd', { text: 'Alt+Shift+' + item[1] })));
+    return section(t('secShortcuts'),
+      checkRow('shortcuts', t('scEnable'), t('scEnableD')),
+      ...rows,
+      h('div', { class: 'note', text: t('scNote') }));
   }
 
   /* ======================================================================
@@ -5480,6 +5984,7 @@
 
     if (document.body) createPanel();
     else document.addEventListener('DOMContentLoaded', createPanel, { once: true });
+    installShortcuts();
 
     window.setInterval(autoReleaseTick, AUTO_RELEASE_INTERVAL_MS);
 
@@ -5497,7 +6002,7 @@
       state, settings, T, DEFAULTS, KNOWN_AD_HOSTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
       videoStates, activateVideo, releaseInactiveNow, hashKey, videoKeyUrl, isLockedMedia,
       selection, downloadRows, linkInfo, copyRecs, downloadRecs, loadAllVideos, THEME_COLORS,
-      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runGmJob, hydrateRows, selectionTotals, infoEligible, autoRowInfo, diagLog,
+      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runDownloadJob, dlQ, retryFailed, pruneSelection, canvasState, queueRescue, hydrateRows, selectionTotals, infoEligible, autoRowInfo, diagLog,
       // Internal test functions
       testSanitize: (input) => sanitize(input, { ...DEFAULTS, customAdHosts: [] }),
       testIsUsableURL: (raw) => isUsableURL(raw),
