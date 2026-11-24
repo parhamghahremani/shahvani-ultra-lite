@@ -2,7 +2,7 @@
 
 **Project Root**: `D:\Desktop\project\scripts\shahvani-ultra-lite`  
 **GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public)  
-**Current Version**: 3.6.3  
+**Current Version**: 3.6.4  
 **Primary Language**: Persian (communication) / English (code, docs, metadata)
 
 ---
@@ -95,13 +95,15 @@ shahvani-ultra-lite/
 - `ASPECT_RATIO_DEFAULT = 16/9`, `GESTURE_WINDOW_MS = 5000`
 - **v3.5.4**: `PROBE_HEAD_BYTES = 16384`, `PROBE_TAIL_BYTES = 8192`, `PROBE_CONCURRENCY = 2`, `PROBE_SESSION_MAX = 120`
 - **v3.6.3**: `PROBE_TOTAL_MS = 24000`, `IS_ANDROID` constant, `DL_CONCURRENCY` (Android 2, Desktop 3)
+- **v3.6.4**: `IDB_VERSION = 4` (savedThumbs store), `GM_DOWNLOAD_TIMEOUT_MS = 20000`, `ANDROID_LINK_GAP_MS = 2000`
 
-### IndexedDB Schema (`IDB_VERSION = 3`)
+### IndexedDB Schema (`IDB_VERSION = 4`)
 - `settings` — key: `main`
 - `resumePositions` — key: `hashKey(videoKeyUrl)`, indexes: `url`, `timestamp`
 - `blockedRequests` — auto-increment key, indexes: `timestamp`, `domain`
 - `videoMetadata` — key: `videoMeta_` + hash, indexes: `videoSrc`, `timestamp` (7-day TTL)
 - `thumbnails` — key: `thumb_` + hash, indexes: `videoSrc`, `timestamp` (30-day TTL) — v3.6.3
+- `savedThumbs` — key: `savedThumb_` + hash, indexes: `videoSrc`, `timestamp` (no TTL) — v3.6.4
 
 ### Hash Function
 ```javascript

@@ -4,7 +4,7 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 
 **Author:** parham  
 **Homepage:** https://github.com/parhamghahremani  
-**Version:** 3.6.3
+**Version:** 3.6.4
 
 ## Features
 
@@ -150,6 +150,7 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| **3.6.4** | 2026-11-24 | Saved videos list (bookmark icon, Alt+Shift+B/S), sturdier thumbnails on Android (auto capture, crossOrigin fallback), fixed Android Firefox downloads (auto-detect Tampermonkey support, 20s timeout, fallback chain), download method setting (auto/browser/Tampermonkey), IndexedDB v4 with savedThumbs store, diagnostics for thumbs/downloads |
 | **3.6.3** | 2026-11-24 | 11 keyboard shortcuts (Alt+Shift+keys), persistent cross-origin thumbnails (IndexedDB), per-page selection scope, direct download queue (no confirmation), parallel GM_download (Android 2/ Desktop 3), retry failed, circuit breaker, up.shahvani.com probe 24s total, @connect * for redirects |
 | **3.6.2** | 2026-11-24 | Selection totals (duration + size) in Download tab, download failure visible with error codes, Diagnostics manager block, auto size/duration lookup for all rows (no button), cache-first with retry logic, up.shahvani.com downloads via GM_download/blob/fallback, Range probe guarded by Accept-Ranges |
 | **3.6.1** | 2026-11-23 | Fixed lock-card size (734×413, 16:9), Download tab live info (size/duration/thumbnail), persistent cache 30 days, Release stops all unlocked videos, cancels Unlock, fixed Unlock busy state, fixed cache key consistency, Update URLs back (point to dist/) |

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Shahvani Ultra Lite
 // @namespace    local.shahvani.ultralite
-// @version      3.6.3
-// @description  Shahvani Ultra Lite 3.6.3 (keyboard shortcuts, persistent thumbnails, per-page selection, direct download queue): tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
+// @version      3.6.4
+// @description  Shahvani Ultra Lite 3.6.4 (saved videos list, sturdier thumbnails + downloads on Firefox for Android, keyboard shortcuts): tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
 // @author       parham
 // @homepageURL  https://github.com/parhamghahremani
 // @updateURL    https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/src/shahvani-ultra-lite.user.js
@@ -22,7 +22,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '3.6.3';
+  const VERSION = '3.6.4';
 
   // v3.6.1: a video / audio / image opened on its own (e.g. a direct up.shahvani.com link in a tab) is the browser's own
   // viewer, not a page: nothing to lock, nothing to patch.
@@ -30,7 +30,7 @@
   const KEY = 'shvUltraLite.settings.v3';
   const LEGACY_KEYS = ['shvUltraLite.settings.v2'];
   const IDB_NAME = 'shvUltraLiteDB';
-  const IDB_VERSION = 3; // v3.5.3: v2 adds the videoMetadata store; v3.6.1: v3 adds the thumbnails store
+  const IDB_VERSION = 4; // v3.5.3: v2 adds the videoMetadata store; v3.6.1: v3 adds the thumbnails store; v3.6.4: v4 adds savedThumbs
   const SITE = 'shahvani.com';
   const MEDIA_DELAY_MS = 60;
   const VISUAL_BATCH_MS = 160;
@@ -145,7 +145,11 @@
     videoProbe: 'off',
 
     // v3.6.3: keyboard shortcuts (Alt+Shift+key)
-    shortcuts: true
+    shortcuts: true,
+
+    // v3.6.4
+    dlMethod: 'auto',     // auto | link (browser link / blob, no Tampermonkey downloader) | gm (Tampermonkey downloader first)
+    autoThumbs: true      // Download tab: make a thumbnail for a row that has none (one picture at a time, cached)
   });
 
   const ENUMS = {
@@ -154,7 +158,8 @@
     scale: ['s', 'm', 'l'],
     side: ['left', 'right'],
     autoReleaseMin: [1, 3, 5, 10, 30],
-    videoProbe: ['off', 'cache', 'auto']
+    videoProbe: ['off', 'cache', 'auto'],
+    dlMethod: ['auto', 'link', 'gm']
   };
 
   // v3.6.0: Theme Color = accent + optional surface tint (dark / light). null tint = stock colors.
@@ -299,6 +304,8 @@
    * blocked requests logging, and domain profiles.
    * @returns {Promise<IDBDatabase>} Resolves with the database instance
    */
+  let idbHealth = 'not used yet';
+
   function idbInit() {
     if (idbDb) return Promise.resolve(idbDb);
     if (idbInitPromise) return idbInitPromise;
@@ -308,11 +315,13 @@
         const request = indexedDB.open(IDB_NAME, IDB_VERSION);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
+          idbHealth = 'ok';
           idbDb = request.result;
           idbDb.onversionchange = () => { try { idbDb.close(); } catch (_) {} idbDb = null; idbInitPromise = null; };
           resolve(idbDb);
         };
-        request.onblocked = () => reject(new Error('IndexedDB blocked'));
+        // v3.6.4: 'blocked' only means another tab still holds the old version: wait for it (it closes itself), do not give up
+        request.onblocked = () => { idbHealth = 'blocked by another tab'; window.setTimeout(() => reject(new Error('IndexedDB blocked')), 8000); };
         request.onupgradeneeded = event => {
           const db = event.target.result;
           if (!db.objectStoreNames.contains('settings')) {
@@ -339,11 +348,17 @@
             const store = db.createObjectStore('thumbnails', { keyPath: 'id' });
             store.createIndex('timestamp', 'timestamp', { unique: false });
           }
+          // v3.6.4: thumbnails of saved videos: kept as long as the video stays saved (no expiry)
+          if (!db.objectStoreNames.contains('savedThumbs')) {
+            db.createObjectStore('savedThumbs', { keyPath: 'id' });
+          }
         };
       } catch (_) {
         reject(new Error('IndexedDB not available'));
       }
     });
+    // v3.6.4: a failed open is not remembered forever - the next call tries again
+    idbInitPromise.catch(err => { idbHealth = 'failed: ' + ((err && (err.name || err.message)) || 'unknown'); idbInitPromise = null; });
     return idbInitPromise;
   }
 
@@ -528,25 +543,77 @@
   const THUMB_TTL_MS = 30 * 24 * 60 * 60 * 1000;
   const THUMB_DB_MAX = 400;
 
-  /** Keeps a stored poster thumbnail: a later frame-based one never replaces it. */
-  function idbSaveThumb(key, url, kind) {
+  /**
+   * v3.6.4: a small ring of records in localStorage - the fallback when IndexedDB is unusable (private window, blocked,
+   * storage policy). { put, get, del }; the oldest record goes first, a quota error drops half of them.
+   */
+  function makeLsRing(storageKey, max, maxLen) {
+    const read = () => {
+      try {
+        const o = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        if (o && Array.isArray(o.o) && o.m && typeof o.m === 'object') return o;
+      } catch (_) {}
+      return { o: [], m: {} };
+    };
+    const write = d => { try { localStorage.setItem(storageKey, JSON.stringify(d)); return true; } catch (_) { return false; } };
+    return {
+      put(key, rec) {
+        if (!key || !rec || !rec.u || (rec.u.length > maxLen && !rec.r)) return;
+        const d = read();
+        if (!d.m[key]) d.o.push(key);
+        rec.t = Date.now();
+        d.m[key] = rec;
+        while (d.o.length > max) delete d.m[d.o.shift()];
+        if (!write(d)) { d.o.splice(0, Math.ceil(d.o.length / 2)).forEach(k => { delete d.m[k]; }); write(d); }
+      },
+      get(keys, ttl) {
+        const d = read();
+        const out = new Map();
+        const limit = ttl ? Date.now() - ttl : 0;
+        for (const k of keys) { const r = d.m[k]; if (r && r.t > limit) out.set(k, r); }
+        return out;
+      },
+      del(key) {
+        const d = read();
+        if (!d.m[key]) return;
+        delete d.m[key];
+        d.o = d.o.filter(k => k !== key);
+        write(d);
+      }
+    };
+  }
+  const lsThumbs = makeLsRing('shvUltraLite.thumbs.v1', 60, 24000);
+  const lsSavedThumbs = makeLsRing('shvUltraLite.savedth.v1', 80, 24000);
+
+  /**
+   * Keeps a stored poster thumbnail: a later frame-based one never replaces it. `remote` = the url is the poster's own
+   * address (a cross-origin poster whose pixels cannot be read), shown straight from the browser's cache.
+   * v3.6.4: a failed IndexedDB write falls back to localStorage.
+   */
+  function idbSaveThumb(key, url, kind, remote) {
     if (!key || !url) return;
-    idbInit().then(db => {
-      if (!db.objectStoreNames.contains('thumbnails')) return;
+    idbInit().then(db => new Promise((resolve, reject) => {
+      if (!db.objectStoreNames.contains('thumbnails')) { reject(new Error('no thumbnails store')); return; }
       const tx = db.transaction('thumbnails', 'readwrite');
       const store = tx.objectStore('thumbnails');
       const req = store.get(key);
       req.onsuccess = () => {
         const old = req.result;
-        if (old && old.kind === 'poster' && kind !== 'poster') return;
-        store.put({ id: key, url, kind, timestamp: Date.now() });
+        if (old && old.kind === 'poster' && !old.remote && kind !== 'poster') return;
+        store.put({ id: key, url, kind, remote: !!remote, timestamp: Date.now() });
       };
-    }).catch(() => {});
+      tx.oncomplete = () => resolve();
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('transaction failed'));
+    })).catch(err => {
+      diagNote('idb', 'thumbnails', err);
+      lsThumbs.put(key, { u: url, k: kind, r: remote ? 1 : 0 });
+    });
   }
 
-  /** @returns {Promise<Map<string, {url: string, kind: string}>>} the thumbnails found for `keys` (fresh ones only). */
+  /** @returns {Promise<Map<string, {url: string, kind: string, remote: boolean}>>} the thumbnails found for `keys` (fresh ones only). */
   function idbGetThumbs(keys) {
-    return idbInit().then(db => new Promise(resolve => {
+    const fromLs = lsThumbs.get(keys, THUMB_TTL_MS);
+    const fromIdb = idbInit().then(db => new Promise(resolve => {
       const out = new Map();
       if (!keys.length || !db.objectStoreNames.contains('thumbnails')) { resolve(out); return; }
       const tx = db.transaction('thumbnails', 'readonly');
@@ -556,12 +623,16 @@
         const req = store.get(key);
         req.onsuccess = () => {
           const r = req.result;
-          if (r && typeof r.url === 'string' && r.timestamp > limit) out.set(key, { url: r.url, kind: r.kind === 'poster' ? 'poster' : 'frame' });
+          if (r && typeof r.url === 'string' && r.timestamp > limit) out.set(key, { url: r.url, kind: r.kind === 'poster' ? 'poster' : 'frame', remote: !!r.remote });
         };
       }
       tx.oncomplete = () => resolve(out);
       tx.onerror = tx.onabort = () => resolve(out);
-    })).catch(() => new Map());
+    })).catch(err => { diagNote('idb', 'read', err); return new Map(); });
+    return fromIdb.then(out => {
+      for (const [k, r] of fromLs) if (!out.has(k)) out.set(k, { url: r.u, kind: r.k === 'poster' ? 'poster' : 'frame', remote: !!r.r });
+      return out;
+    });
   }
 
   /** @returns {Promise<Map<string, {duration: number, size: number}>>} cached duration / size (videoMetadata store, 7 days). */
@@ -824,14 +895,14 @@
       stDlGmRunning: 'Tampermonkey is still downloading {name} (no progress reports).',
       stDlGmDone: 'Download finished / started: {name}',
       stDlBlob: 'Tampermonkey downloader failed, trying the fallback: {name}',
-      stDlSentFailed: 'Started {n}; {f} failed (reason in red, links copied; use Retry failed). Skipped: {m}.',
+      stDlSentFailed: 'Started {n}{v}; {f} failed (reason in red, links copied; use Retry failed). Skipped: {m}.',
       dlSelectAll: 'Select all',
       dlDeselectAll: 'Deselect all',
       dlDownload: 'Download Selected ({n})',
       dlCopy: 'Copy Selected Links ({n})',
       dlConfirm: 'Send {n} downloads? Tap again',
       dlEmpty: 'No videos found on this page.',
-      dlNote: 'Downloads go straight into the queue - no confirmation, one video or many. Several run at once; a failed one is listed in red with its reason and can be retried. On Android the Tampermonkey downloader is used for every file, so Firefox does not ask for each one. Videos of up.shahvani.com always go through Tampermonkey (allow its permission prompt once: "Always allow all domains"). Only videos of THIS page can be selected. Size and duration are looked up automatically (file header only).',
+      dlNote: 'Downloads go straight into the queue - no confirmation, one video or many. Several run at once; a failed one is listed in red with its reason and can be retried. Download method: Auto picks what works on your device (Android: the Tampermonkey downloader is tried first and dropped for the session if it does not start a file), Browser = plain links / memory, Tampermonkey = its downloader first. up.shahvani.com always needs Tampermonkey (allow its permission prompt once: Always allow all domains). Only videos of THIS page are listed - use the bookmark icon to keep one for later.',
       dlOffPage: 'Not on this page',
       dlStream: 'Stream playlist: no direct file',
       dlNoLink: 'No usable link',
@@ -842,7 +913,7 @@
       dlTipCopy: 'Copy this video link',
       stDlNone: 'Nothing selected.',
       stDlSending: 'Sending downloads: {i} of {n}',
-      stDlSent: 'Started {n} download(s). Skipped: {m}.',
+      stDlSent: 'Started {n} download(s){v}. Skipped: {m}.',
       stDlUnavailable: 'None of these can be downloaded here ({m}). Use Copy link.',
       stDlBusy: 'Downloads are still being sent.',
       stDlLimit: 'Selection limit reached ({n}).',
@@ -881,7 +952,34 @@
       scNowOn: 'Shahvani Ultra Lite: On',
       scNowOff: 'Shahvani Ultra Lite: Off',
       scSelected: 'Selected {n} video(s).',
-      scDeselected: 'Selection cleared.'
+      scDeselected: 'Selection cleared.',
+      // v3.6.4
+      svOpen: 'Saved ({n})',
+      svCount: 'Saved: {n} · selected: {m}',
+      svBack: 'Back to this page',
+      svEmpty: 'Nothing saved yet. Use the bookmark icon on a video row of the Download list.',
+      svNote: 'Saved videos keep their address, name, duration, size and thumbnail until you remove them - on any page. Play opens the video in a new tab.',
+      svRemove: 'Remove from saved ({n})',
+      svRemoveSure: 'Tap again to remove {n}',
+      svTipPlay: 'Play in a new tab',
+      dlTipSave: 'Save this video',
+      dlTipSaved: 'Saved - tap to remove',
+      stSaved: '{n} video(s) saved.',
+      stUnsaved: '{n} video(s) removed from the saved list.',
+      stSavedFull: 'The saved list is full ({n}).',
+      stSvNone: 'Tick some saved videos first.',
+      dlMethod: 'Download method',
+      dlMethodAuto: 'Auto',
+      dlMethodLink: 'Browser',
+      dlMethodGm: 'Tampermonkey',
+      autoThumbs: 'Make missing thumbnails',
+      autoThumbsD: 'Download tab: a row without a picture gets one (a few hundred KB, one at a time), then it is cached for good.',
+      viaTm: 'Tampermonkey',
+      viaLink: 'browser link',
+      viaBlob: 'Tampermonkey memory',
+      viaFetch: 'page',
+      scSave: 'Save the selected videos',
+      scSaved: 'Open / close the saved list'
     },
     fa: {
       brand: 'اولترا لایت',
@@ -1092,14 +1190,14 @@
       stDlGmRunning: 'Tampermonkey هنوز در حال دانلود {name} است (گزارش پیشرفت نمی‌دهد).',
       stDlGmDone: 'دانلود تمام شد / شروع شد: {name}',
       stDlBlob: 'دانلودر Tampermonkey ناموفق بود، روش جایگزین: {name}',
-      stDlSentFailed: '{n} دانلود شروع شد؛ {f} ناموفق بود (دلیل با رنگ قرمز، لینک‌ها کپی شد؛ «تلاش دوباره» را بزنید). ردشده: {m}.',
+      stDlSentFailed: '{n} دانلود شروع شد{v}؛ {f} ناموفق بود (دلیل با رنگ قرمز، لینک‌ها کپی شد؛ «تلاش دوباره» را بزنید). ردشده: {m}.',
       dlSelectAll: 'انتخاب همه',
       dlDeselectAll: 'لغو انتخاب همه',
       dlDownload: 'دانلود انتخاب‌شده‌ها ({n})',
       dlCopy: 'کپی لینک انتخاب‌شده‌ها ({n})',
       dlConfirm: 'ارسال {n} دانلود؟ دوباره لمس کنید',
       dlEmpty: 'ویدیویی در این صفحه پیدا نشد.',
-      dlNote: 'دانلودها مستقیم و بدون تأیید وارد صف می‌شوند، چه یک ویدیو چه چندتا. چند دانلود هم‌زمان اجرا می‌شود و دانلود ناموفق با دلیلش قرمز نمایش داده می‌شود و قابل تلاش دوباره است. در اندروید برای همهٔ فایل‌ها دانلودر Tampermonkey استفاده می‌شود تا Firefox برای هر فایل سؤال نکند. ویدیوهای up.shahvani.com همیشه با Tampermonkey دانلود می‌شوند (پنجرهٔ اجازهٔ آن را یک‌بار تأیید کنید: «Always allow all domains»). فقط ویدیوهای همین صفحه قابل انتخاب هستند. حجم و مدت‌زمان خودکار پیدا می‌شود (فقط سرآیند فایل).',
+      dlNote: 'دانلودها مستقیم و بدون تأیید وارد صف می‌شوند، چه یک ویدیو چه چندتا. چند دانلود هم‌زمان اجرا می‌شود و دانلود ناموفق با دلیلش قرمز نمایش داده می‌شود و قابل تلاش دوباره است. روش دانلود: «خودکار» آنچه روی دستگاه شما کار می‌کند را انتخاب می‌کند (اندروید: اول دانلودر Tampermonkey امتحان می‌شود و اگر فایلی شروع نکرد تا پایان نشست کنار گذاشته می‌شود)، «مرورگر» = لینک ساده / حافظه، «Tampermonkey» = اول دانلودر آن. ویدیوهای up.shahvani.com همیشه به Tampermonkey نیاز دارند (پنجره‌ی اجازه‌ی آن را یک‌بار تأیید کنید: Always allow all domains). فقط ویدیوهای همین صفحه فهرست می‌شوند - با آیکون نشانک یکی را برای بعد نگه دارید.',
       dlOffPage: 'در این صفحه نیست',
       dlStream: 'پلی‌لیست استریم: فایل مستقیم ندارد',
       dlNoLink: 'لینک قابل‌استفاده ندارد',
@@ -1110,7 +1208,7 @@
       dlTipCopy: 'کپی لینک این ویدیو',
       stDlNone: 'چیزی انتخاب نشده.',
       stDlSending: 'در حال ارسال دانلودها: {i} از {n}',
-      stDlSent: '{n} دانلود شروع شد. ردشده: {m}.',
+      stDlSent: '{n} دانلود شروع شد{v}. ردشده: {m}.',
       stDlUnavailable: 'هیچ‌کدام اینجا قابل دانلود نیستند ({m}). از کپی لینک استفاده کنید.',
       stDlBusy: 'ارسال دانلودها هنوز ادامه دارد.',
       stDlLimit: 'به سقف انتخاب رسیدید ({n}).',
@@ -1150,6 +1248,33 @@
       scNowOff: 'اولترا لایت شهوانی: خاموش',
       scSelected: '{n} ویدیو انتخاب شد.',
       scDeselected: 'انتخاب‌ها پاک شد.',
+      // v3.6.4
+      svOpen: 'ذخیره‌شده‌ها ({n})',
+      svCount: 'ذخیره‌شده: {n} · انتخاب‌شده: {m}',
+      svBack: 'بازگشت به این صفحه',
+      svEmpty: 'هنوز چیزی ذخیره نشده. از آیکون نشانک روی ردیف ویدیو در لیست دانلود استفاده کنید.',
+      svNote: 'ویدیوهای ذخیره‌شده تا وقتی حذفشان نکنید آدرس، نام، مدت‌زمان، حجم و تامبنیلشان در هر صفحه‌ای نگه داشته می‌شود. دکمه‌ی پخش ویدیو را در تب جدید باز می‌کند.',
+      svRemove: 'لغو ذخیره ({n})',
+      svRemoveSure: 'برای حذف {n} مورد دوباره بزنید',
+      svTipPlay: 'پخش در تب جدید',
+      dlTipSave: 'ذخیره‌ی این ویدیو',
+      dlTipSaved: 'ذخیره شده - برای حذف بزنید',
+      stSaved: '{n} ویدیو ذخیره شد.',
+      stUnsaved: '{n} ویدیو از ذخیره‌شده‌ها حذف شد.',
+      stSavedFull: 'فهرست ذخیره‌شده‌ها پر است ({n}).',
+      stSvNone: 'اول چند ویدیوی ذخیره‌شده را انتخاب کنید.',
+      dlMethod: 'روش دانلود',
+      dlMethodAuto: 'خودکار',
+      dlMethodLink: 'مرورگر',
+      dlMethodGm: 'Tampermonkey',
+      autoThumbs: 'ساخت تامبنیل‌های ناقص',
+      autoThumbsD: 'تب دانلود: ردیف بدون تصویر یک تصویر می‌گیرد (چند صد کیلوبایت، یکی‌یکی) و برای همیشه کش می‌شود.',
+      viaTm: 'Tampermonkey',
+      viaLink: 'لینک مرورگر',
+      viaBlob: 'حافظه‌ی Tampermonkey',
+      viaFetch: 'صفحه',
+      scSave: 'ذخیره‌ی ویدیوهای انتخاب‌شده',
+      scSaved: 'باز / بستن فهرست ذخیره‌شده‌ها'
     }
   };
 
@@ -1182,6 +1307,7 @@
     lastPageGesture: 0,   // v3.6.1: last tap / key on the PAGE (taps on our own panel do not count)
     status: { key: 'stReady', vars: null },
     activeTab: 'home',
+    savedView: false,        // v3.6.4: the Download tab shows the saved-videos list instead of this page's list
     open: false,
     ui: null,
     videoIndex: 0,
@@ -3593,7 +3719,10 @@
       userAgent: navigator.userAgent,
       stats: { ...collectStats(), blockedScripts: state.blockedScripts, blockedRequests: state.blockedRequests, popups: state.popupsBlocked },
       probe: { mode: probeMode(), requests: state.probeCount, bytesRead: state.probeBytes },
-      manager: { handler: gmHandler(), download: !!GM_FN.download, request: !!GM_FN.request, downloadMode: gmMode(), recent: diagLog },
+      manager: { handler: gmHandler(), download: !!GM_FN.download, request: !!GM_FN.request, downloadMode: gmMode(), downloaderHealth: gmDlHealth, recent: diagLog },
+      downloads: dlLog,
+      thumbs: { ...thumbStats, cached: thumbCache.size, rescueQueued: rescueCount, idb: idbHealth },
+      saved: { count: saved.size },
       settings
     }, null, 1);
   }
@@ -3944,7 +4073,7 @@
   const selection = new Map();   // key -> { k, u, i, d, s }  (key, url, number, duration, size) - survives DOM changes
   const thumbCache = new Map();  // key -> { url?: data URL, canvas?: HTMLCanvasElement (tainted: memory only), kind: 'poster' | 'frame' }
   const dlInfo = new Map();      // key -> { duration, size, state: '' | 'run' | 'done' | 'fail', fails, retryAt }  (our own lookup + its retries)
-  const dlUI = { box: null, rows: new Map(), count: null, total: null, err: null, btnDl: null, btnCopy: null, area: null, empty: null, queue: null, btnRetry: null };
+  const dlUI = { box: null, rows: new Map(), count: null, total: null, err: null, btnDl: null, btnCopy: null, area: null, empty: null, queue: null, btnRetry: null, btnSaved: null };
   const dlHydrated = new Set();  // keys whose IndexedDB lookup was started on this page
   const dlHydrateDone = new Set(); // ... and finished: the cache is always asked before the network
   const dlMetaSaved = new Set();
@@ -4037,41 +4166,52 @@
     } catch (_) { return 'unknown'; }
   }
 
-  function commitThumb(key, url, canvas, kind) {
+  const thumbStats = { captured: 0, blank: 0, tainted: 0, rescued: 0, failed: 0 };
+
+  function commitThumb(key, url, canvas, kind, remote) {
     thumbCache.delete(key);
-    thumbCache.set(key, { url, canvas: url ? null : canvas, kind });
+    thumbCache.set(key, { url, canvas: url ? null : canvas, kind, remote: !!remote });
     while (thumbCache.size > THUMB_MAX) thumbCache.delete(thumbCache.keys().next().value);
-    if (url) idbSaveThumb(key, url, kind);
+    if (url) { idbSaveThumb(key, url, kind, remote); savedNoteThumb(key, url, remote); }
     queueRowUpdate();
   }
 
   /**
    * Draws an already-loaded image / video frame into a small canvas: no network. The result is kept as a small JPEG
-   * (memory + IndexedDB). v3.6.3: a blank / black result is refused (returns false, the caller tries again later), and a canvas
-   * tainted by a cross-origin picture (up.shahvani.com) - which cannot be exported - is re-made from bytes fetched through the
-   * manager, so it is cached in IndexedDB too and survives a reload. A poster thumbnail is never replaced by a frame.
-   * @returns {boolean} true when something usable was stored
+   * (memory + IndexedDB / localStorage). A blank / black result is refused (returns false, the caller tries again later).
+   * v3.6.4: a canvas tainted by a cross-origin picture (up.shahvani.com) cannot be exported:
+   *   - a poster is remembered by its address (an <img> shows it from the browser cache);
+   *   - a frame is shown from memory on desktop (on Android such a frame is often black and cannot be checked, so it waits);
+   *   - either one is re-made in a readable way by the rescue queue (CORS element, then the manager) and cached for good.
+   * A poster thumbnail is never replaced by a frame.
+   * @returns {boolean} true when nothing more is to be tried for this capture
    */
   function storeThumb(key, source, sw, sh, kind, origin) {
     if (!key || !(sw > 0 && sh > 0)) return false;
     const old = thumbCache.get(key);
-    if (old && old.kind === 'poster' && kind !== 'poster') return true;
+    if (old && old.kind === 'poster' && !old.remote && kind !== 'poster') return true;
+    if (old && old.kind === 'poster' && !old.remote && old.url && kind === 'poster') return true;
     try {
       const canvas = scaledCanvas(source, sw, sh);
-      if (canvasState(canvas) === 'blank') return false;
+      if (canvasState(canvas) === 'blank') { thumbStats.blank++; return false; }
       let url = '';
       try { url = canvas.toDataURL('image/jpeg', THUMB_JPEG_QUALITY); } catch (_) { url = ''; }
       if (url && !/^data:image\//.test(url)) url = '';
-      commitThumb(key, url, canvas, kind);
-      if (!url && origin) queueRescue(key, kind, origin);
+      if (url) { thumbStats.captured++; commitThumb(key, url, canvas, kind, false); return true; }
+      thumbStats.tainted++;
+      if (kind === 'poster' && origin && !(old && old.url)) commitThumb(key, origin, null, 'poster', true);
+      else if (kind !== 'poster' && !IS_ANDROID) commitThumb(key, '', canvas, kind, false);
+      if (origin) queueRescue(key, kind, origin, '');
       return true;
     } catch (_) { return false; }
   }
 
-  /* ---- v3.6.3: persistent thumbnails for cross-origin pictures (tainted canvas cannot be exported) ---- */
+  /* ---- v3.6.4: readable thumbnails for cross-origin pictures (a tainted canvas cannot be exported) ---- */
 
   const rescueTried = new Set();
   const rescueQueue = [];
+  const RESCUE_CAP = 80;               // pictures per page load
+  let rescueCount = 0;
   let rescueBusy = false;
 
   function mimeOfVideo(url) {
@@ -4143,73 +4283,135 @@
     });
   }
 
-  /** A frame a little into the video, from the first bytes held in a same-origin blob (readable canvas). Faststart (moov first) files only. */
-  function blobVideoToCanvas(blob, origin) {
+  /** The picture loaded with CORS ("anonymous"): readable when the other host sends Access-Control-Allow-Origin, an error otherwise. */
+  function corsImageToCanvas(url) {
     return new Promise(resolve => {
-      let href = '';
+      let done = false;
+      const img = new Image();
+      const finish = c => { if (done) return; done = true; window.clearTimeout(timer); resolve(c); };
+      const timer = window.setTimeout(() => finish(null), 10000);
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        let c = null;
+        try { c = scaledCanvas(img, img.naturalWidth, img.naturalHeight); if (canvasState(c) === 'unknown') c = null; } catch (_) { c = null; }
+        finish(c);
+      };
+      img.onerror = () => finish(null);
+      img.src = url;
+    });
+  }
+
+  /**
+   * A frame a little into the video, drawn from a detached element of our own (never the page's video). `cors` loads the
+   * address with CORS so the canvas stays readable; otherwise the source is a same-origin blob. The frame is taken after the
+   * seek; when the browser has not painted it (Firefox for Android hands out an empty surface) the element is played muted
+   * for a moment and the first presented frame is taken (requestVideoFrameCallback where it exists).
+   */
+  function videoToCanvas(src, opts) {
+    return new Promise(resolve => {
       let video = null;
       let done = false;
       let timer = 0;
+      let tries = 0;
+      let playing = false;
       const finish = canvas => {
         if (done) return;
         done = true;
         window.clearTimeout(timer);
+        try { video.pause(); } catch (_) {}
         try { video.removeAttribute('src'); NATIVE.load.call(video); } catch (_) {}
-        try { URL.revokeObjectURL(href); } catch (_) {}
+        if (opts.revoke) { try { opts.revoke(); } catch (_) {} }
         resolve(canvas);
       };
       try {
-        const type = /^video\//.test(blob.type || '') ? blob.type : mimeOfVideo(origin);
-        href = URL.createObjectURL(new Blob([blob], { type }));
         video = document.createElement('video');
         unsafeVideos.add(video);          // our own lock must not touch this element
+        if (opts.cors) video.crossOrigin = 'anonymous';
         video.muted = true;
+        video.defaultMuted = true;
         video.playsInline = true;
         video.preload = 'auto';
-        let tries = 0;
         const grab = () => {
-          if (!(video.videoWidth > 0)) return false;
-          const c = scaledCanvas(video, video.videoWidth, video.videoHeight);
-          if (canvasState(c) === 'blank') return false;
+          if (done || !(video.videoWidth > 0)) return false;
+          let c = null;
+          try { c = scaledCanvas(video, video.videoWidth, video.videoHeight); } catch (_) { return false; }
+          const st = canvasState(c);
+          if (st === 'blank' || st === 'unknown') return false;
           finish(c);
+          return true;
+        };
+        const watchFrames = () => {
+          if (done) return;
+          const tick = () => { if (!done && !grab()) schedule(); };
+          const schedule = () => { if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(tick); else window.setTimeout(tick, 250); };
+          schedule();
+        };
+        const viaPlay = () => {
+          if (playing) return false;
+          playing = true;
+          try { const p = video.play(); if (p && p.catch) p.catch(() => {}); } catch (_) { return false; }
+          watchFrames();
           return true;
         };
         video.addEventListener('loadeddata', () => {
           const d = Number.isFinite(video.duration) ? video.duration : 0;
-          try { video.currentTime = Math.max(0.2, Math.min(1.5, d * 0.05)); } catch (_) { if (!grab()) finish(null); }
+          try { video.currentTime = Math.max(0.2, Math.min(1.5, d * 0.05)); } catch (_) { if (!grab() && !viaPlay()) finish(null); }
         }, { once: true });
         video.addEventListener('seeked', () => {
           if (grab()) return;
+          if (viaPlay()) return;
           if (++tries > 3) { finish(null); return; }
           try { video.currentTime = video.currentTime + 1; } catch (_) { finish(null); }
         });
         video.addEventListener('error', () => finish(null), { once: true });
-        timer = window.setTimeout(() => finish(null), 15000);
-        video.src = href;
+        timer = window.setTimeout(() => finish(null), opts.timeout || 15000);
+        video.src = src;
       } catch (_) { finish(null); }
     });
   }
 
+  /** The first bytes held in a same-origin blob (readable canvas). Faststart (moov first) files only. */
+  function blobVideoToCanvas(blob, origin) {
+    let href = '';
+    try {
+      const type = /^video\//.test(blob.type || '') ? blob.type : mimeOfVideo(origin);
+      href = URL.createObjectURL(new Blob([blob], { type }));
+    } catch (_) { return Promise.resolve(null); }
+    return videoToCanvas(href, { revoke: () => URL.revokeObjectURL(href), timeout: 15000 });
+  }
+
   async function rescueJob(job) {
     const old = thumbCache.get(job.key);
-    if (old && old.url) return;                                       // a persistent one exists already
-    if (old && old.kind === 'poster' && job.kind !== 'poster') return;
+    if (old && old.url && !old.remote) return;                                   // a persistent one exists already
+    if (old && old.kind === 'poster' && !old.remote && job.kind !== 'poster') return;
+    const why = [];
     let canvas = null;
     if (job.kind === 'poster') {
-      const blob = isCrossOrigin(job.origin) ? await gmGetBlob(job.origin, 0) : await fetchBlobSimple(job.origin);
-      canvas = await blobImageToCanvas(blob);
+      canvas = await corsImageToCanvas(job.origin);
+      if (!canvas && !isCrossOrigin(job.origin)) { try { canvas = await blobImageToCanvas(await fetchBlobSimple(job.origin)); } catch (e) { why.push('fetch: ' + errCode(e)); } }
+      if (!canvas && GM_FN.request && !gmHostBlocked(job.origin)) { try { canvas = await blobImageToCanvas(await gmGetBlob(job.origin, 0)); } catch (e) { why.push('manager: ' + errCode(e)); } }
     } else {
-      const blob = await gmGetBlob(job.origin, THUMB_VIDEO_BYTES);
-      canvas = await blobVideoToCanvas(blob, job.origin);
+      canvas = await videoToCanvas(job.origin, { cors: true, timeout: 14000 });
+      if (!canvas) why.push('page element: no CORS answer or no frame');
+      if (!canvas && GM_FN.request && !gmHostBlocked(job.origin)) {
+        try { canvas = await blobVideoToCanvas(await gmGetBlob(job.origin, THUMB_VIDEO_BYTES), job.origin); } catch (e) { why.push('manager: ' + errCode(e)); }
+      }
     }
-    if (!canvas || canvasState(canvas) === 'blank') { diagNote('thumb', job.origin, 'no usable picture'); return; }
-    let url = '';
-    try { url = canvas.toDataURL('image/jpeg', THUMB_JPEG_QUALITY); } catch (_) { url = ''; }
-    if (!url || !/^data:image\//.test(url)) return;
-    const current = thumbCache.get(job.key);
-    if (current && current.url) return;
-    if (current && current.kind === 'poster' && job.kind !== 'poster') return;
-    commitThumb(job.key, url, null, job.kind);
+    if (canvas && canvasState(canvas) !== 'blank') {
+      let url = '';
+      try { url = canvas.toDataURL('image/jpeg', THUMB_JPEG_QUALITY); } catch (_) { url = ''; }
+      if (url && /^data:image\//.test(url)) {
+        const current = thumbCache.get(job.key);
+        if (!(current && current.url && !current.remote) && !(current && current.kind === 'poster' && !current.remote && job.kind !== 'poster')) {
+          commitThumb(job.key, url, null, job.kind, false);
+          thumbStats.rescued++;
+        }
+        return;
+      }
+    }
+    thumbStats.failed++;
+    diagNote('thumb', job.origin, why.join(' | ') || 'no usable picture');
+    if (job.kind === 'poster' && job.fallback) queueRescue(job.key, 'frame', job.fallback, '');
   }
 
   function pumpRescue() {
@@ -4218,17 +4420,17 @@
     rescueBusy = true;
     rescueJob(job).catch(err => diagNote('thumb', job.origin, err)).then(() => {
       rescueBusy = false;
-      window.setTimeout(pumpRescue, 200);
+      window.setTimeout(pumpRescue, 250);
     });
   }
 
-  function queueRescue(key, kind, origin) {
+  function queueRescue(key, kind, origin, fallback) {
     if (!key || !origin || !/^https?:/i.test(origin)) return;
-    if (isCrossOrigin(origin) && (!GM_FN.request || gmHostBlocked(origin))) return;
     const tag = kind + ':' + key;
-    if (rescueTried.has(tag)) return;
+    if (rescueTried.has(tag) || rescueCount >= RESCUE_CAP) return;
     rescueTried.add(tag);
-    rescueQueue.push({ key, kind, origin });
+    rescueCount++;
+    rescueQueue.push({ key, kind, origin, fallback: fallback || '' });
     pumpRescue();
   }
 
@@ -4239,12 +4441,15 @@
     const key = keyOfVideo(video, entry || videoStates.get(video));
     if (!key) return false;
     const old = thumbCache.get(key);
-    if (old && old.kind === 'poster') return true;
+    if (old && old.kind === 'poster' && !old.remote) return true;
     const ok = storeThumb(key, video, video.videoWidth, video.videoHeight, 'frame', videoURLOf(video, entry || videoStates.get(video)));
-    if (!ok) {                                   // nothing painted yet (Android): look again a little later, a few times
+    if (!ok) {                                   // nothing painted yet (Android): look again when a frame is presented, and a little later
       const n = (blankTries.get(video) || 0) + 1;
       blankTries.set(video, n);
-      if (n <= 6) window.setTimeout(() => captureAny(video, entry), 600 * n);
+      if (n <= 8) {
+        if (typeof video.requestVideoFrameCallback === 'function') video.requestVideoFrameCallback(() => captureAny(video, entry));
+        window.setTimeout(() => captureAny(video, entry), 600 * n);
+      }
     }
     return ok;
   }
@@ -4295,6 +4500,7 @@
 
   function learnInfo(key, duration, size) {
     if (!key) return false;
+    savedTouch(key, duration, size);
     let info = dlInfo.get(key);
     if (!info) { info = { duration: 0, size: 0, state: '', fails: 0, retryAt: 0 }; dlInfo.set(key, info); }
     let changed = false;
@@ -4321,7 +4527,7 @@
     }
     if (!need.length) return Promise.resolve();
     return Promise.all([idbGetThumbs(need), idbGetVideoMetaMany(need)]).then(([thumbs, metas]) => {
-      for (const [key, th] of thumbs) if (!thumbCache.has(key)) thumbCache.set(key, { url: th.url, canvas: null, kind: th.kind });
+      for (const [key, th] of thumbs) if (!thumbCache.has(key)) thumbCache.set(key, { url: th.url, canvas: null, kind: th.kind, remote: !!th.remote });
       for (const [key, m] of metas) learnInfo(key, m.duration, m.size);
     }).catch(() => {}).then(() => {
       for (const key of need) dlHydrateDone.add(key);   // only now may a lookup (network) be considered for these videos
@@ -4460,6 +4666,7 @@
       }
       if (dlUI.btnDl) dlUI.btnDl.refresh();
       if (dlUI.btnCopy) dlUI.btnCopy.refresh();
+      if (dlUI.btnSaved) dlUI.btnSaved.textContent = t('svOpen', { n: saved.size });
       if (dlUI.queue) {
         const line = dlStatusLine();
         dlUI.queue.textContent = line;
@@ -4472,6 +4679,7 @@
         if (show) dlUI.btnRetry.textContent = t('dlRetry', { n });
       }
     }
+    refreshSavedUI();
   }
 
   /** Brings every row checkbox in line with the selection (in place - no list rebuild). */
@@ -4530,9 +4738,11 @@
   /** The last download problem stays on screen (a toast is gone before it can be read). */
   function dlReport(text) {
     if (text) diagNote('download', '', text);
-    if (dlUI.err && dlUI.err.isConnected) {
-      dlUI.err.textContent = text || '';
-      dlUI.err.style.display = text ? '' : 'none';
+    for (const el of [dlUI.err, svUI.err]) {
+      if (el && el.isConnected) {
+        el.textContent = text || '';
+        el.style.display = text ? '' : 'none';
+      }
     }
   }
 
@@ -4551,17 +4761,50 @@
   }
 
   const DL_CONCURRENCY = IS_ANDROID ? 2 : 3;   // manager downloads running at the same time (the browser keeps its own queue)
-  const DL_FIRST_ANSWER_MS = 25000;            // a manager that says nothing at all for this long is assumed to be running the file
-  const dlQ = { pending: [], running: 0, total: 0, done: 0, skipped: 0, failed: [], active: new Set(), tabLinks: [], anchor: Promise.resolve() };
+  const DL_FIRST_ANSWER_MS = 20000;            // v3.6.4: a manager downloader that says NOTHING for this long has not started (it used to count as 'running')
+  const dlQ = { pending: [], running: 0, total: 0, done: 0, skipped: 0, failed: [], active: new Set(), tabLinks: [], anchor: Promise.resolve(), via: {} };
+  const dlLog = [];   // v3.6.4: how each recent download was started (diagnostics)
+  function dlLogAdd(name, via, ok, err) {
+    dlLog.push({ t: new Date().toISOString().slice(11, 19), name: String(name).slice(0, 40), via, ok: !!ok, err: String(err || '').slice(0, 140) });
+    while (dlLog.length > 14) dlLog.shift();
+  }
 
-  /** Stage 1: the manager's own downloader. { ok } | { ok: false, err } | { ok: true, running: true } (silent for a long time). */
-  function gmDownloadStage(url, name, withHeaders) {
+  /**
+   * v3.6.4: does the manager's own downloader work on this device at all? (Firefox for Android has no downloads API, so
+   * Tampermonkey's GM_download may say nothing and never start a file.) One failure with no success before it switches
+   * 'auto' to the other ways for the rest of the tab's life; the 'Tampermonkey' method in the menu still always tries it.
+   */
+  const GMDL_HEALTH_KEY = 'shv.gmdl.v1';
+  const gmDlHealth = (() => {
+    try { const o = JSON.parse(sessionStorage.getItem(GMDL_HEALTH_KEY) || 'null'); if (o) return { ok: +o.ok || 0, bad: +o.bad || 0 }; } catch (_) {}
+    return { ok: 0, bad: 0 };
+  })();
+  function gmDlNote(good) {
+    if (good) gmDlHealth.ok++; else gmDlHealth.bad++;
+    try { sessionStorage.setItem(GMDL_HEALTH_KEY, JSON.stringify(gmDlHealth)); } catch (_) {}
+  }
+  function gmDlBroken() { return gmDlHealth.bad >= 1 && gmDlHealth.ok === 0; }
+
+  /**
+   * Stage 1: the manager's own downloader. { ok } | { ok: false, err, silent? }.
+   * v3.6.4 (strict): it counts as started only after an answer - finished, or a progress report. A downloader that stays
+   * silent is aborted and reported as failed so the next way is tried (before: silence counted as success, nothing downloaded).
+   */
+  function gmDownloadStage(url, name, withHeaders, strict) {
     return new Promise(resolve => {
       let settled = false;
       let watchdog = 0;
       let got = false;
+      let handle = null;
       const done = result => { if (settled) return; settled = true; window.clearTimeout(watchdog); resolve(result); };
-      const arm = () => { window.clearTimeout(watchdog); watchdog = window.setTimeout(() => done({ ok: true, running: true }), got ? DL_STALL_MS : DL_FIRST_ANSWER_MS); };
+      const arm = () => {
+        window.clearTimeout(watchdog);
+        watchdog = window.setTimeout(() => {
+          if (got || !strict) { done({ ok: true, running: true }); return; }
+          try { if (handle && typeof handle.abort === 'function') handle.abort(); } catch (_) {}
+          done({ ok: false, err: 'no answer from the downloader (' + gmHandler() + ')', silent: true });
+        }, got ? DL_STALL_MS : DL_FIRST_ANSWER_MS);
+      };
       try {
         arm();
         const details = {
@@ -4575,7 +4818,7 @@
           onprogress: () => { got = true; arm(); }
         };
         if (withHeaders) details.headers = refererHeader();
-        const handle = GM_FN.download(details);
+        handle = GM_FN.download(details);
         if (handle && typeof handle.then === 'function') handle.then(() => done({ ok: true }), e => done({ ok: false, err: errCode(e) }));
       } catch (err) {
         done({ ok: false, err: errCode(err) });
@@ -4655,46 +4898,60 @@
 
   /** One plain <a download> click, serialised: clicks are spaced out so the browser (Firefox for Android in particular) does not drop any. */
   function nativeClick(url) {
-    const gap = IS_ANDROID ? 1200 : DOWNLOAD_GAP_MS;
+    const gap = IS_ANDROID ? 2000 : DOWNLOAD_GAP_MS;
     const run = dlQ.anchor.then(() => { triggerDownload(url); return sleepMs(gap); });
     dlQ.anchor = run.catch(() => {});
     return run;
   }
 
   /**
-   * One job. Same origin on desktop: Firefox's own download (plain link). Everything else goes through the manager:
-   *   manager downloader (with Referer) -> again without custom headers -> manager blob -> page fetch blob -> failed.
-   * On Android the manager is also used for same-origin files: its downloader starts the file straight away, while a plain
-   * link makes Firefox ask for every single file.
+   * One job. Order depends on Settings > Download method (dlMethod):
+   *   auto - same origin: Firefox's own link (desktop) / the manager's downloader first (Android); another origin: the manager.
+   *   link - the browser only: a link (same origin) or the manager fetching a blob that the browser saves (another origin).
+   *   gm   - the manager's downloader first, always.
+   * The manager chain: downloader (with Referer) -> again without custom headers -> blob -> page fetch -> failed.
+   * Whatever starts a file reports how ('via'): it is shown in the summary and in the diagnostics.
    */
   async function runDownloadJob(job) {
     const name = fileNameOf(job.url);
     const notes = [];
+    const method = settings.dlMethod;
+    const sameOrigin = job.mode === 'native';
     const gmDl = !!GM_FN.download && gmMode() !== 'disabled';
-    if (job.mode === 'tab') { dlQ.tabLinks.push(job.url); return { ok: false, name, err: 'no Tampermonkey download (link copied)' }; }
-    if (job.mode === 'native' && !(IS_ANDROID && gmDl)) { await nativeClick(job.url); return { ok: true, name }; }
+    const started = via => { dlLogAdd(name, via, true, ''); return { ok: true, name, via }; };
+    if (job.mode === 'tab') { dlQ.tabLinks.push(job.url); dlLogAdd(name, 'tab', false, 'no Tampermonkey download'); return { ok: false, name, err: 'no Tampermonkey download (link copied)' }; }
 
-    if (gmDl) {
+    const tryGmDl = gmDl && method !== 'link' && (method === 'gm' || !gmDlBroken()) && (!sameOrigin || IS_ANDROID || method === 'gm');
+    if (sameOrigin && !tryGmDl) { await nativeClick(job.url); return started('link'); }
+
+    if (tryGmDl) {
       setStatus('stDlGmStart', { i: dlQ.done + dlQ.failed.length + 1, n: dlQ.total, name });
-      let first = await gmDownloadStage(job.url, name, true);
-      if (!first.ok) { notes.push('Tampermonkey: ' + first.err); first = await gmDownloadStage(job.url, name, false); if (!first.ok) notes.push('Tampermonkey (no headers): ' + first.err); }
-      if (first.ok) { if (first.running) setStatus('stDlGmRunning', { name }); return { ok: true, name }; }
-    } else {
-      notes.push(GM_FN.download ? 'Tampermonkey downloads are disabled (Settings > Downloads)' : 'no Tampermonkey download');
+      let first = await gmDownloadStage(job.url, name, true, true);
+      if (!first.ok && !first.silent) {
+        notes.push('Tampermonkey: ' + first.err);
+        first = await gmDownloadStage(job.url, name, false, true);
+      }
+      if (!first.ok) notes.push('Tampermonkey' + (first.silent ? '' : ' (no headers)') + ': ' + first.err);
+      gmDlNote(first.ok);
+      if (first.ok) { if (first.running) setStatus('stDlGmRunning', { name }); return started('tm'); }
+    } else if (!sameOrigin) {
+      notes.push(!GM_FN.download ? 'no Tampermonkey download' : (method === 'link' ? 'Tampermonkey downloader skipped (Download method: browser)' : 'Tampermonkey downloader skipped (it did not start a file earlier)'));
     }
-    if (job.mode === 'native') { await nativeClick(job.url); return { ok: true, name }; }   // same origin: the plain link is the last option
+    if (sameOrigin) { await nativeClick(job.url); return started('link'); }   // same origin: the plain link is the last option
 
-    const size = (dlInfo.get(job.key) && dlInfo.get(job.key).size) || (selection.get(job.key) && selection.get(job.key).s) || 0;
+    const size = (dlInfo.get(job.key) && dlInfo.get(job.key).size) || (selection.get(job.key) && selection.get(job.key).s) || (saved.get(job.key) && saved.get(job.key).s) || 0;
     if (GM_FN.request) {
       setStatus('stDlBlob', { name });
       const second = await gmBlobStage(job.url, name, size);
-      if (second.ok) return { ok: true, name };
+      if (second.ok) return started('tm-blob');
       notes.push('fallback: ' + second.err);
     }
     const third = await fetchBlobStage(job.url, name, size);
-    if (third.ok) return { ok: true, name };
+    if (third.ok) return started('page-fetch');
     notes.push(third.err);
-    return { ok: false, name, err: notes.join(' | ') };
+    const err = notes.join(' | ');
+    dlLogAdd(name, 'failed', false, err);
+    return { ok: false, name, err };
   }
 
   function dlStatusLine() {
@@ -4705,17 +4962,19 @@
     const failed = dlQ.failed.slice();
     const done = dlQ.done;
     const skipped = dlQ.skipped;
+    const viaKeys = { tm: 'viaTm', link: 'viaLink', 'tm-blob': 'viaBlob', 'page-fetch': 'viaFetch' };
+    const via = Object.keys(dlQ.via).length ? ' (' + Object.keys(dlQ.via).map(k => t(viaKeys[k] || 'viaLink') + ' ' + dlQ.via[k]).join(', ') + ')' : '';
     dlBusy = false;
     if (failed.length) {
       const links = failed.map(item => item.job.url);
       copyText(links.join('\n')).catch(() => {});
       if (dlQ.tabLinks.length) openInTab(dlQ.tabLinks[0]);
       dlReport(failed.slice(0, 4).map(item => item.name + ' - ' + item.err).join('\n') + (failed.length > 4 ? '\n+' + (failed.length - 4) : ''));
-      setStatus('stDlSentFailed', { n: done, f: failed.length, m: skipped }, true);
+      setStatus('stDlSentFailed', { n: done, f: failed.length, m: skipped, v: via }, true);
     } else {
-      setStatus('stDlSent', { n: done, m: skipped }, true);
+      setStatus('stDlSent', { n: done, m: skipped, v: via }, true);
     }
-    dlQ.total = 0; dlQ.done = 0; dlQ.skipped = 0; dlQ.tabLinks = [];
+    dlQ.total = 0; dlQ.done = 0; dlQ.skipped = 0; dlQ.tabLinks = []; dlQ.via = {};
     refreshDownloadUI();
   }
 
@@ -4726,7 +4985,7 @@
       runDownloadJob(job).catch(err => ({ ok: false, name: fileNameOf(job.url), err: errCode(err) })).then(res => {
         dlQ.running--;
         dlQ.active.delete(job.url);
-        if (res.ok) dlQ.done++;
+        if (res.ok) { dlQ.done++; dlQ.via[res.via] = (dlQ.via[res.via] || 0) + 1; }
         else { dlQ.failed.push({ job, name: res.name, err: res.err }); diagNote('download', job.url, res.err); }
         if (dlQ.running === 0 && !dlQ.pending.length) dlFinish();
         else { setStatus('stDlQueue', { i: dlQ.done + dlQ.failed.length, n: dlQ.total, f: dlQ.failed.length }); dlPump(); }
@@ -4764,6 +5023,372 @@
     const recs = dlQ.failed.map(item => ({ key: item.job.key, url: item.job.url }));
     dlQ.failed = [];
     downloadRecs(recs);
+  }
+
+  /* ======================================================================
+   * Saved videos (v3.6.4)
+   * A video can be saved from its row in the Download list (bookmark icon). The address, name, duration, size and
+   * thumbnail are kept for good (no expiry) until it is un-saved: meta in localStorage, thumbnails in IndexedDB
+   * (localStorage fallback). The saved list is opened with the "Saved" button of the Download tab (Alt+Shift+B).
+   * ==================================================================== */
+
+  const SAVED_KEY = 'shvUltraLite.saved.v1';
+  const SAVED_MAX = 500;
+  const ICON_BOOKMARK = 'M6 3h12v18l-6-4-6 4z';
+  const ICON_PLAY = 'M8 5v14l11-7z';
+  const saved = new Map();          // key -> { k, u: address, n: file name, t: page title, p: page, a: saved at, d: duration, s: size }
+  const savedThumbs = new Map();    // key -> { url, remote }
+  const savedSel = new Set();       // keys ticked in the saved list
+  const svUI = { box: null, rows: new Map(), count: null, queue: null, btnRetry: null, btnDl: null, btnCopy: null, btnRemove: null, err: null, empty: null };
+  let savedPersistTimer = 0;
+  let savedThumbsReady = null;
+  let svPollTimer = 0;
+  const savedInfoTried = new Set();
+  let savedProbeBusy = false;
+
+  function savedLoad() {
+    try {
+      const list = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
+      if (!Array.isArray(list)) return;
+      for (const r of list.slice(0, SAVED_MAX)) {
+        if (r && typeof r.k === 'string' && typeof r.u === 'string' && /^https?:/i.test(r.u)) {
+          saved.set(r.k, { k: r.k, u: r.u, n: String(r.n || ''), t: String(r.t || ''), p: String(r.p || ''), a: +r.a || 0, d: +r.d || 0, s: +r.s || 0 });
+        }
+      }
+    } catch (_) {}
+  }
+  savedLoad();
+
+  function savedFlush() {
+    window.clearTimeout(savedPersistTimer);
+    savedPersistTimer = 0;
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify(Array.from(saved.values()))); } catch (err) { diagNote('saved', '', err); }
+  }
+  function savedPersist() {
+    window.clearTimeout(savedPersistTimer);
+    savedPersistTimer = window.setTimeout(savedFlush, 150);
+  }
+  window.addEventListener('pagehide', () => { if (savedPersistTimer) savedFlush(); });
+
+  function savedList() {
+    return Array.from(saved.values()).sort((x, y) => y.a - x.a);
+  }
+
+  /** Duration / size learned later (a lookup, the cache, a video that was opened) are written into the saved record. */
+  function savedTouch(key, duration, size) {
+    const r = saved.get(key);
+    if (!r) return;
+    let changed = false;
+    if (duration > 0 && !(r.d > 0)) { r.d = duration; changed = true; }
+    if (size > 0 && !(r.s > 0)) { r.s = size; changed = true; }
+    if (changed) savedPersist();
+  }
+
+  /* thumbnails of saved videos: permanent while saved */
+  function savedThumbPut(key, url, remote) {
+    if (!key || !url) return;
+    savedThumbs.set(key, { url, remote: !!remote });
+    idbInit().then(db => new Promise((resolve, reject) => {
+      if (!db.objectStoreNames.contains('savedThumbs')) { reject(new Error('no savedThumbs store')); return; }
+      const tx = db.transaction('savedThumbs', 'readwrite');
+      tx.objectStore('savedThumbs').put({ id: key, url, remote: !!remote, timestamp: Date.now() });
+      tx.oncomplete = () => resolve();
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('transaction failed'));
+    })).catch(err => {
+      diagNote('idb', 'savedThumbs', err);
+      lsSavedThumbs.put(key, { u: url, r: remote ? 1 : 0 });
+    });
+  }
+
+  function savedThumbDelete(key) {
+    savedThumbs.delete(key);
+    lsSavedThumbs.del(key);
+    idbInit().then(db => {
+      if (!db.objectStoreNames.contains('savedThumbs')) return;
+      db.transaction('savedThumbs', 'readwrite').objectStore('savedThumbs').delete(key);
+    }).catch(() => {});
+  }
+
+  function savedThumbsLoad() {
+    if (savedThumbsReady) return savedThumbsReady;
+    const keys = Array.from(saved.keys());
+    for (const [k, r] of lsSavedThumbs.get(keys, 0)) savedThumbs.set(k, { url: r.u, remote: !!r.r });
+    savedThumbsReady = idbInit().then(db => new Promise(resolve => {
+      if (!keys.length || !db.objectStoreNames.contains('savedThumbs')) { resolve(); return; }
+      const tx = db.transaction('savedThumbs', 'readonly');
+      const store = tx.objectStore('savedThumbs');
+      for (const k of keys) {
+        const req = store.get(k);
+        req.onsuccess = () => { const r = req.result; if (r && typeof r.url === 'string') savedThumbs.set(k, { url: r.url, remote: !!r.remote }); };
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = tx.onabort = () => resolve();
+    })).catch(err => { diagNote('idb', 'savedThumbs read', err); });
+    return savedThumbsReady;
+  }
+
+  /** commitThumb calls this: a thumbnail made for a saved video is kept with it (a picture is never downgraded to an address). */
+  function savedNoteThumb(key, url, remote) {
+    if (!saved.has(key) || !url) return;
+    const cur = savedThumbs.get(key);
+    if (cur && !cur.remote && remote) return;
+    savedThumbPut(key, url, remote);
+  }
+
+  function saveRec(rec) {
+    const info = linkInfo(rec.url);
+    if (!info.ok) return false;
+    if (saved.has(rec.key)) return true;
+    if (saved.size >= SAVED_MAX) { setStatus('stSavedFull', { n: SAVED_MAX }, true); return false; }
+    const known = dlInfo.get(rec.key);
+    saved.set(rec.key, {
+      k: rec.key,
+      u: info.url,
+      n: fileNameOf(info.url),
+      t: String(document.title || '').replace(/\s+/g, ' ').trim().slice(0, 90),
+      p: location.origin + location.pathname + location.search,
+      a: Date.now(),
+      d: rec.duration || (known && known.duration) || 0,
+      s: rec.size || (known && known.size) || 0
+    });
+    const th = thumbCache.get(rec.key);
+    if (th && th.url) savedThumbPut(rec.key, th.url, th.remote);
+    else if (settings.autoThumbs) queueRescue(rec.key, 'frame', info.url, '');
+    savedPersist();
+    return true;
+  }
+
+  function unsaveKey(key) {
+    if (!saved.delete(key)) return;
+    savedSel.delete(key);
+    savedThumbDelete(key);
+    savedPersist();
+  }
+
+  function toggleSaved(rec) {
+    if (saved.has(rec.key)) { unsaveKey(rec.key); setStatus('stUnsaved', { n: 1 }, true); }
+    else if (saveRec(rec)) setStatus('stSaved', { n: 1 }, true);
+    syncSavedUI();
+  }
+
+  function setSaveBtn(btn, on) {
+    const tip = t(on ? 'dlTipSaved' : 'dlTipSave');
+    btn.classList.toggle('on', on);
+    btn.title = tip;
+    btn.setAttribute('aria-label', tip);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+
+  /** Brings every bookmark icon / counter in line with the saved list (in place). */
+  function syncSavedUI() {
+    for (const ref of dlUI.rows.values()) if (ref.saveBtn) setSaveBtn(ref.saveBtn, saved.has(ref.rec.key));
+    if (dlUI.btnSaved && dlUI.btnSaved.isConnected) dlUI.btnSaved.textContent = t('svOpen', { n: saved.size });
+    refreshSavedUI();
+  }
+
+  function openVideoTab(url) {
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.referrerPolicy = 'origin';         // the video host sees where it is linked from (hot-link filters), not the page address
+      a.style.display = 'none';
+      (state.ui ? state.ui.root : (document.body || document.documentElement)).appendChild(a);
+      a.click();
+      window.setTimeout(() => a.remove(), 1000);
+    } catch (err) { diagNote('play', url, err); }
+  }
+
+  const savedRec = item => ({ key: item.k, url: item.u, duration: item.d, size: item.s });
+  const savedSelRecs = () => savedList().filter(item => savedSel.has(item.k)).map(savedRec);
+
+  function rowAction(path, tip, fn, disabled) {
+    const button = h('button', { class: 'ib', type: 'button', title: tip, 'aria-label': tip });
+    button.append(svgIcon(path));
+    if (disabled) button.setAttribute('disabled', '');
+    button.addEventListener('click', event => { event.stopPropagation(); fn(); });
+    return button;
+  }
+
+  function paintSavedRow(ref) {
+    const item = saved.get(ref.item.k) || ref.item;
+    ref.item = item;
+    const cached = thumbCache.get(item.k) || savedThumbs.get(item.k) || null;
+    const sig = cached ? cached.url || cached.canvas : null;
+    if (ref.thumbOf !== sig || (!cached && ref.thumbOf === undefined)) {
+      ref.thumbOf = sig;
+      ref.thumb.textContent = '';
+      const node = cached ? thumbNode(cached) : null;
+      if (node) ref.thumb.append(node); else ref.thumb.textContent = '▶';
+      ref.thumb.classList.toggle('has', !!node);
+    }
+    const known = dlInfo.get(item.k);
+    const d = item.d > 0 ? item.d : (known ? known.duration : 0);
+    const sz = item.s > 0 ? item.s : (known ? known.size : 0);
+    const set = (chip, text, empty) => { const v = text || empty; if (chip.textContent !== v) chip.textContent = v; chip.classList.toggle('unk', !text); };
+    set(ref.dur, formatDuration(d), '--:--');
+    set(ref.size, formatSize(sz), '-- MB');
+  }
+
+  function paintSavedRows() {
+    if (!svUI.box || !svUI.box.isConnected) return;
+    for (const ref of svUI.rows.values()) paintSavedRow(ref);
+  }
+
+  function savedRow(item, n) {
+    const info = linkInfo(item.u);
+    const on = savedSel.has(item.k);
+    const cb = h('span', { class: 'cb', role: 'checkbox', tabindex: '0', 'aria-label': t('dlTipSelect'), 'aria-checked': String(on), 'data-on': on ? '1' : '0', text: '✓' });
+    const thumb = h('div', { class: 'dlth', 'aria-hidden': 'true' });
+    const dur = h('span', { class: 'dlchip unk', title: t('dlChipDuration'), text: '--:--' });
+    const size = h('span', { class: 'dlchip unk', title: t('dlChipSize'), text: '-- MB' });
+    let when = '';
+    try { when = new Date(item.a).toLocaleDateString(settings.lang === 'fa' ? 'fa-IR' : undefined); } catch (_) { when = ''; }
+    const notes = [];
+    if (!info.ok) notes.push(t(info.reason === 'stream' ? 'dlStream' : 'dlNoLink'));
+    const infoBox = h('div', { class: 'dlinfo' }, h('b', { text: '#' + n }), h('div', { class: 'dlmeta' }, dur, size),
+      item.t ? h('small', { class: 'svtitle', text: item.t }) : null, h('small', { text: when }), ...notes.map(text => h('small', { text })));
+    const ref = { row: null, cb, thumb, dur, size, item, thumbOf: undefined };
+    const actions = h('div', { class: 'dlact' },
+      rowAction(ICON_DOWNLOAD, t('dlTipDownload'), () => downloadRecs([savedRec(ref.item)]), !info.ok),
+      rowAction(ICON_COPY, t('dlTipCopy'), () => copyRecs([savedRec(ref.item)]), !info.ok),
+      rowAction(ICON_PLAY, t('svTipPlay'), () => openVideoTab(ref.item.u), !info.ok));
+    ref.row = h('div', { class: 'dlrow' }, cb, thumb, infoBox, actions);
+    activate(cb, () => toggleSavedRow(ref.item.k));
+    infoBox.addEventListener('click', () => toggleSavedRow(ref.item.k));
+    thumb.addEventListener('click', () => toggleSavedRow(ref.item.k));
+    paintSavedRow(ref);
+    return ref;
+  }
+
+  function toggleSavedRow(key) {
+    if (savedSel.has(key)) savedSel.delete(key); else savedSel.add(key);
+    const ref = svUI.rows.get(key);
+    if (ref) { const on = savedSel.has(key); ref.cb.setAttribute('data-on', on ? '1' : '0'); ref.cb.setAttribute('aria-checked', String(on)); }
+    refreshSavedUI();
+  }
+
+  function setAllSavedSelected(on) {
+    savedSel.clear();
+    if (on) for (const item of savedList()) savedSel.add(item.k);
+    for (const [key, ref] of svUI.rows) { const v = savedSel.has(key); ref.cb.setAttribute('data-on', v ? '1' : '0'); ref.cb.setAttribute('aria-checked', String(v)); }
+    refreshSavedUI();
+  }
+
+  function refreshSavedUI() {
+    if (!svUI.box || !svUI.box.isConnected) return;
+    svUI.count.textContent = t('svCount', { n: saved.size, m: savedSel.size });
+    for (const btn of [svUI.btnDl, svUI.btnCopy, svUI.btnRemove]) if (btn) btn.refresh();
+    if (svUI.empty) svUI.empty.style.display = saved.size ? 'none' : '';
+    const line = dlStatusLine();
+    svUI.queue.textContent = line;
+    svUI.queue.style.display = line ? '' : 'none';
+    const n = dlQ.failed.length;
+    const show = n > 0 && !dlQ.running && !dlQ.pending.length;
+    svUI.btnRetry.style.display = show ? '' : 'none';
+    if (show) svUI.btnRetry.textContent = t('dlRetry', { n });
+  }
+
+  function removeSavedSelected() {
+    const keys = Array.from(savedSel);
+    for (const key of keys) unsaveKey(key);
+    setStatus('stUnsaved', { n: keys.length }, true);
+    if (state.open && state.savedView) renderAll();
+    syncSavedUI();
+  }
+
+  function openSaved() {
+    if (!state.ui) return;
+    state.activeTab = 'download';
+    state.savedView = true;
+    if (state.open) { renderAll(); state.ui.body.scrollTop = 0; } else toggleSheet(true);
+  }
+
+  function closeSaved() {
+    state.savedView = false;
+    if (state.ui) { renderAll(); state.ui.body.scrollTop = 0; }
+  }
+
+  /** Sizes / durations / pictures that a saved video still lacks are looked up one at a time while the list is open. */
+  function savedProbeNext() {
+    if (savedProbeBusy || document.hidden) return;
+    const item = savedList().find(i => !(i.d > 0 && i.s > 0) && !savedInfoTried.has(i.k) && linkInfo(i.u).ok);
+    if (!item) return;
+    savedInfoTried.add(item.k);
+    savedProbeBusy = true;
+    const cached = probeSession.get(item.k);
+    if (!cached) state.probeCount++;
+    (cached ? Promise.resolve(cached) : probeVideo(item.u)).then(res => {
+      if (res && (res.size > 0 || res.duration > 0)) {
+        probeSession.set(item.k, res);
+        learnInfo(item.k, res.duration, res.size);
+        saveVideoCache({ videoSrc: item.u, videoDuration: res.duration, videoSize: res.size, probed: true });
+      }
+    }).catch(() => {}).then(() => {
+      savedProbeBusy = false;
+      paintSavedRows();
+      window.setTimeout(savedProbeNext, 300);
+    });
+  }
+
+  function savedWarm() {
+    const recs = savedList().map(item => ({ key: item.k, live: true }));
+    Promise.all([savedThumbsLoad(), hydrateRows(recs)]).then(() => {
+      for (const item of savedList()) {
+        if (!thumbCache.has(item.k) && !savedThumbs.has(item.k) && settings.autoThumbs && linkInfo(item.u).ok) queueRescue(item.k, 'frame', item.u, '');
+      }
+      paintSavedRows();
+      savedProbeNext();
+    });
+  }
+
+  function startSavedPoll() {
+    if (svPollTimer) return;
+    svPollTimer = window.setInterval(() => {
+      if (!svUI.box || !svUI.box.isConnected) { window.clearInterval(svPollTimer); svPollTimer = 0; return; }
+      paintSavedRows();
+      savedProbeNext();
+    }, 1500);
+  }
+
+  function buildSaved() {
+    const f = document.createDocumentFragment();
+    for (const key of Array.from(savedSel)) if (!saved.has(key)) savedSel.delete(key);
+    svUI.rows = new Map();
+    svUI.count = h('b', { class: 'dlcount' });
+    svUI.queue = h('div', { class: 'dlsum dlq' });
+    svUI.queue.style.display = 'none';
+    svUI.err = h('div', { class: 'note dlerr', role: 'alert' });
+    svUI.err.style.display = 'none';
+    const needOne = () => { if (!savedSel.size) { setStatus('stSvNone', null, true); return null; } return undefined; };
+    svUI.btnDl = confirmButton(() => t('dlDownload', { n: savedSel.size }), () => (needOne() === null ? null : false), () => downloadRecs(savedSelRecs()), 'p');
+    svUI.btnCopy = confirmButton(() => t('dlCopy', { n: savedSel.size }), () => (needOne() === null ? null : false), () => copyRecs(savedSelRecs()));
+    svUI.btnRemove = confirmButton(() => t('svRemove', { n: savedSel.size }), () => (needOne() === null ? null : t('svRemoveSure', { n: savedSel.size })), removeSavedSelected);
+    svUI.btnRetry = h('button', { class: 'btn', type: 'button', text: t('dlRetry', { n: 0 }), onclick: retryFailed });
+    svUI.btnRetry.style.display = 'none';
+
+    f.append(h('div', { class: 'dlbar' },
+      h('div', { class: 'svtop' }, h('button', { class: 'btn', type: 'button', text: '← ' + t('svBack'), onclick: closeSaved }), svUI.count),
+      h('div', { class: 'dlbtns' },
+        h('button', { class: 'btn', type: 'button', text: t('dlSelectAll'), onclick: () => setAllSavedSelected(true) }),
+        h('button', { class: 'btn', type: 'button', text: t('dlDeselectAll'), onclick: () => setAllSavedSelected(false) }),
+        svUI.btnDl, svUI.btnCopy, svUI.btnRemove),
+      svUI.queue, svUI.btnRetry, svUI.err));
+    f.append(h('div', { class: 'note', text: t('svNote') }));
+
+    svUI.box = h('div', { class: 'dlbox' });
+    svUI.empty = h('div', { class: 'note', text: t('svEmpty') });
+    svUI.box.append(svUI.empty);
+    let n = 0;
+    for (const item of savedList()) {
+      const ref = savedRow(item, ++n);
+      svUI.rows.set(item.k, ref);
+      svUI.box.append(ref.row);
+    }
+    f.append(svUI.box);
+    window.setTimeout(() => { refreshSavedUI(); savedWarm(); startSavedPoll(); }, 0);
+    return f;
   }
 
   function showManualCopy(text) {
@@ -5016,9 +5641,13 @@
       return button;
     };
     const ref = { row: null, cb, thumb, dur, size, rec, thumbOf: undefined };
+    const saveBtn = action(ICON_BOOKMARK, t('dlTipSave'), () => toggleSaved(ref.rec), !info.ok);
+    ref.saveBtn = saveBtn;
+    setSaveBtn(saveBtn, saved.has(rec.key));
     const actions = h('div', { class: 'dlact' },
       action(ICON_DOWNLOAD, t('dlTipDownload'), () => downloadRecs([ref.rec]), !canDownload),
-      action(ICON_COPY, t('dlTipCopy'), () => copyRecs([ref.rec]), !info.ok));
+      action(ICON_COPY, t('dlTipCopy'), () => copyRecs([ref.rec]), !info.ok),
+      saveBtn);
 
     ref.row = h('div', { class: 'dlrow' + (rec.live ? '' : ' off') }, cb, thumb, infoBox, actions);
     activate(cb, () => toggleRow(ref.rec));
@@ -5051,7 +5680,10 @@
     for (const rec of rows) {
       seen.add(rec.key);
       // v3.6.3: a row without a thumbnail whose video has a poster gets it (small picture, cached) - no need to open the video
-      if (rec.poster && dlHydrateDone.has(rec.key) && !thumbCache.has(rec.key)) queueRescue(rec.key, 'poster', rec.poster);
+      if (dlHydrateDone.has(rec.key) && !thumbCache.has(rec.key)) {
+        if (rec.poster) queueRescue(rec.key, 'poster', rec.poster, settings.autoThumbs ? rec.url : '');
+        else if (settings.autoThumbs && linkInfo(rec.url).ok) queueRescue(rec.key, 'frame', rec.url, '');
+      }
       const ref = dlUI.rows.get(rec.key);
       if (!ref) { insertRow(rec); continue; }
       if (ref.rec.live !== rec.live || ref.rec.url !== rec.url) {      // left the page / source changed: rebuild this row only
@@ -5090,6 +5722,7 @@
 
   /** Download tab: independent of the script's On/Off state (no dim(), no entries needed). */
   function buildDownload() {
+    if (state.savedView) return buildSaved();
     const f = document.createDocumentFragment();
     sweepVideos();
     pruneSelection();
@@ -5113,6 +5746,7 @@
     }, () => copyRecs(selectedRecs()));
     dlUI.btnRetry = h('button', { class: 'btn', type: 'button', text: t('dlRetry', { n: 0 }), onclick: retryFailed });
     dlUI.btnRetry.style.display = 'none';
+    dlUI.btnSaved = h('button', { class: 'btn', type: 'button', text: t('svOpen', { n: saved.size }), onclick: openSaved });
     dlUI.area = h('textarea', { dir: 'ltr', spellcheck: 'false', readonly: '', hidden: '' });
 
     // v3.6.3: the controls stay at the top while the list scrolls (phones: no scrolling back up to reach Download)
@@ -5121,9 +5755,12 @@
       h('div', { class: 'dlbtns' },
         h('button', { class: 'btn', type: 'button', text: t('dlSelectAll'), onclick: () => setAllSelected(true) }),
         h('button', { class: 'btn', type: 'button', text: t('dlDeselectAll'), onclick: () => setAllSelected(false) }),
-        dlUI.btnDl, dlUI.btnCopy),
+        dlUI.btnDl, dlUI.btnCopy, dlUI.btnSaved),
       dlUI.btnRetry, dlUI.err, dlUI.area));
-    f.append(h('details', { class: 'dlnote' }, h('summary', { text: t('dlNoteTitle') }), h('div', { class: 'note', text: t('dlNote') })));
+    f.append(h('details', { class: 'dlnote' }, h('summary', { text: t('dlNoteTitle') }), h('div', { class: 'note', text: t('dlNote') }),
+      h('div', { class: 'pad' },
+        segment(t('dlMethod'), settings.dlMethod, [['auto', t('dlMethodAuto')], ['link', t('dlMethodLink')], ['gm', t('dlMethodGm')]], v => setOpt('dlMethod', v)),
+        checkRow('autoThumbs', t('autoThumbs'), t('autoThumbsD')))));
 
     dlUI.box = h('div', { class: 'dlbox' });
     dlUI.empty = h('div', { class: 'note', text: t('dlEmpty') });
@@ -5317,6 +5954,13 @@
     details.dlnote > summary { cursor: pointer; font-weight: 700; font-size: .84em; color: var(--mut); padding: 8px 2px; }
     .dlrow { padding: 11px 4px; }
     @media (pointer: coarse) { .ib { width: 44px; height: 44px; } .dlrow .cb { width: 30px; height: 30px; } .dlrow { gap: 12px; } }
+    .svtop { display: flex; align-items: center; gap: 10px; }
+    .svtop .btn { flex: none; padding: 9px 14px; }
+    .svtitle { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .dlinfo { min-width: 0; }
+    .ib.on { color: var(--ac); }
+    .ib.on svg path { fill: currentColor; }
+    .ib[disabled] { opacity: .35; }
     .kbrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 8px; border-top: 1px solid var(--bd); }
     .kbrow:first-child { border-top: 0; }
     .kbrow kbd { font: 700 .86em ui-monospace, Menlo, monospace; padding: 3px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--bd); white-space: nowrap; direction: ltr; }
@@ -5732,7 +6376,7 @@
     ui.tabs.textContent = '';
     for (const [id, key] of TABS) {
       ui.tabs.append(h('button', { class: 'tab', type: 'button', role: 'tab', 'aria-selected': String(state.activeTab === id), text: tabLabel(id, key), 'data-tab': id,
-        onclick: () => { state.activeTab = id; renderAll(); ui.body.scrollTop = 0; } }));
+        onclick: () => { state.activeTab = id; state.savedView = false; renderAll(); ui.body.scrollTop = 0; } }));
     }
 
     const scrollTop = ui.body.scrollTop;
@@ -5860,8 +6504,9 @@
 
   function openTab(id) {
     if (!state.ui) return;
-    if (state.open && state.activeTab === id) { toggleSheet(false); return; }
+    if (state.open && state.activeTab === id && !state.savedView) { toggleSheet(false); return; }
     state.activeTab = id;
+    state.savedView = false;
     if (state.open) { renderAll(); state.ui.body.scrollTop = 0; } else toggleSheet(true);
   }
 
@@ -5890,6 +6535,20 @@
     copyRecs(recs);
   }
 
+  function shortcutSave() {
+    const recs = selectedRecs();
+    if (!recs.length) { setStatus('stDlNone', null, true); return; }
+    let n = 0;
+    for (const rec of recs) if (saveRec(rec)) n++;
+    syncSavedUI();
+    setStatus('stSaved', { n }, true);
+  }
+
+  function shortcutSaved() {
+    if (state.open && state.activeTab === 'download' && state.savedView) { toggleSheet(false); return; }
+    openSaved();
+  }
+
   function shortcutEmergency() {
     setEmergency(!state.emergency);
     if (state.open) renderAll();
@@ -5906,6 +6565,8 @@
     ['KeyA', 'A', 'scSelectAll', () => shortcutSelect(true)],
     ['KeyN', 'N', 'scDeselectAll', () => shortcutSelect(false)],
     ['KeyG', 'G', 'scDownload', shortcutDownload],
+    ['KeyS', 'S', 'scSave', shortcutSave],
+    ['KeyB', 'B', 'scSaved', shortcutSaved],
     ['KeyC', 'C', 'scCopy', shortcutCopy],
     ['KeyX', 'X', 'scEmergency', shortcutEmergency]
   ];
@@ -6002,7 +6663,7 @@
       state, settings, T, DEFAULTS, KNOWN_AD_HOSTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
       videoStates, activateVideo, releaseInactiveNow, hashKey, videoKeyUrl, isLockedMedia,
       selection, downloadRows, linkInfo, copyRecs, downloadRecs, loadAllVideos, THEME_COLORS,
-      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runDownloadJob, dlQ, retryFailed, pruneSelection, canvasState, queueRescue, hydrateRows, selectionTotals, infoEligible, autoRowInfo, diagLog,
+      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runDownloadJob, dlQ, retryFailed, pruneSelection, canvasState, queueRescue, hydrateRows, saved, savedSel, savedThumbs, saveRec, toggleSaved, unsaveKey, savedList, idbSaveThumb, lsThumbs, lsSavedThumbs, gmDlHealth, dlLog, thumbStats, openSaved, buildSaved, buildDownload, renderAll, selectionTotals, infoEligible, autoRowInfo, diagLog,
       // Internal test functions
       testSanitize: (input) => sanitize(input, { ...DEFAULTS, customAdHosts: [] }),
       testIsUsableURL: (raw) => isUsableURL(raw),

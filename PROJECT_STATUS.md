@@ -1,8 +1,8 @@
 # Project Status — Shahvani Ultra Lite
 
 **Last Updated**: 2026-11-24  
-**Current Version**: 3.6.3  
-**Git Commit**: e740f13 (v3.6.1) — working tree has v3.6.3 changes  
+**Current Version**: 3.6.4  
+**Git Commit**: e740f13 (v3.6.1) — working tree has v3.6.4 changes  
 **GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, pushed 2026-11-23)
 
 ---
@@ -11,7 +11,8 @@
 
 | Version | Date | Status | Key Features |
 |---------|------|--------|--------------|
-| 3.6.3 | 2026-11-24 | **Current** | 11 keyboard shortcuts (Alt+Shift+keys), persistent cross-origin thumbnails (IndexedDB), per-page selection scope, direct download queue (no confirmation), parallel GM_download (Android 2/ Desktop 3), retry failed, circuit breaker, up.shahvani.com probe 24s total, @connect * for redirects |
+| 3.6.4 | 2026-11-24 | **Current** | Saved videos list (bookmark icon, Alt+Shift+B/S), sturdier thumbnails on Android (auto capture, crossOrigin fallback), fixed Android Firefox downloads (auto-detect TM support, 20s timeout, fallback chain), download method setting (auto/browser/TM), IndexedDB v4 with savedThumbs store, diagnostics for thumbs/downloads |
+| 3.6.3 | 2026-11-24 | Archived | 11 keyboard shortcuts (Alt+Shift+keys), persistent cross-origin thumbnails (IndexedDB), per-page selection scope, direct download queue (no confirmation), parallel GM_download (Android 2/ Desktop 3), retry failed, circuit breaker, up.shahvani.com probe 24s total, @connect * for redirects |
 | 3.6.2 | 2026-11-24 | Archived | Selection totals in Download tab, download failure visible with error codes, Diagnostics manager block, auto size/duration lookup for all rows (no button), cache-first with retry logic (3 tries), up.shahvani.com downloads via GM_download/blob/fallback, Range probe guarded by Accept-Ranges |
 | 3.6.1 | 2026-11-23 | Archived | Fixed lock-card size (734×413, 16:9), Download tab live info (size/duration/thumbnail), persistent cache 30 days, Release stops all unlocked videos, cancels Unlock, fixed Unlock busy state, fixed cache key consistency, Update URLs back (point to dist/), GM_download/GM_xmlhttpRequest for up.shahvani.com |
 | 3.6.0 | 2026-11-22 | Archived | Download tab (select, copy links, native Firefox download), Unlock & Load All, Theme Color (8 presets replaces Accent+Preset), sessionStorage selection persistence, Migration from 3.5.x settings |
@@ -40,7 +41,7 @@
 ## File Inventory
 
 ### Source
-- `src/shahvani-ultra-lite.user.js` — **v3.6.3** (~268KB)
+- `src/shahvani-ultra-lite.user.js` — **v3.6.4** (~302KB)
 
 ### Version Archives (`versions/`)
 | File | Size | Date |
@@ -61,18 +62,20 @@
 | v3.6.1.user.js | ~185KB | 2026-11-23 |
 | v3.6.2.user.js | ~190KB | 2026-11-24 |
 | v3.6.3.user.js | ~268KB | 2026-11-24 |
+| v3.6.4.user.js | ~302KB | 2026-11-24 |
 
 ### Backups (`backups/`)
 | Type | Files | Verified |
 |------|-------|----------|
-| Releases (ZIP) | v3.5.0–v3.6.3 | ✅ SHA256 recorded |
-| Git Bundles | v3.5.1–v3.6.3 | ✅ `git bundle verify` OK |
+| Releases (ZIP) | v3.5.0–v3.6.4 | ✅ SHA256 recorded |
+| Git Bundles | v3.5.1–v3.6.4 | ✅ `git bundle verify` OK |
 | Pre-Change | v3.5.0–v3.5.4 | ✅ |
 | Manifest | BACKUP_MANIFEST.md | ✅ Complete |
 | v3.6.0 | complete | ✅ |
 | v3.6.1 | complete | ✅ |
 | v3.6.2 | complete | ✅ |
 | v3.6.3 | complete | ✅ |
+| v3.6.4 | complete | ✅ |
 
 ### Documentation (`docs/`)
 | File | Status |
@@ -93,8 +96,8 @@
 |------|--------|
 | CLAUDE.md | ✅ Created |
 | .gitignore | ✅ Created |
-| package.json | ✅ v3.6.3 |
-| README.md | ✅ v3.6.3 |
+| package.json | ✅ v3.6.4 |
+| README.md | ✅ v3.6.4 |
 | playwright.config.js | ✅ Exists |
 | .claude/launch.json | ✅ Exists |
 
@@ -127,9 +130,9 @@ Changes not staged for commit:
 
 | Test | Status | Notes |
 |------|--------|-------|
-| Syntax check (`node --check`) | ✅ Pass | v3.6.3 |
+| Syntax check (`node --check`) | ✅ Pass | v3.6.4 |
 | Build (`node build.js`) | ✅ Pass | versions/ + dist/ created |
-| Manual test (Firefox + TM) | ⏳ Pending | v3.6.3 features to verify |
+| Manual test (Firefox + TM) | ⏳ Pending | v3.6.4 features to verify |
 | Probe auto mode | ✅ Pass | Range requests only, no video download |
 | Cache persistence | ✅ Pass | Size/duration from IndexedDB on revisit |
 | Numbering stability | ✅ Pass | No duplicates from app-forum-topic |
@@ -146,6 +149,7 @@ Changes not staged for commit:
 - **v3.6.1 pushed to GitHub: 2026-11-23**
 - v3.6.2 pushed to GitHub: 2026-11-24
 - **v3.6.3 pushed to GitHub: 2026-11-24**
+- **v3.6.4 pushed to GitHub: 2026-11-24**
 
 ---
 
@@ -161,22 +165,23 @@ Changes not staged for commit:
 8. **`GM_download`/`GM_xmlhttpRequest` permission** — Tampermonkey will prompt once after update
 9. **`GM_*` under `@sandbox raw` in Firefox** — Not documented by Tampermonkey; fallbacks exist
 10. **up.shahvani.com Tampermonkey silence** — Root cause unconfirmed; likely permission prompt or redirect to other domain
-11. **Android Firefox GM_download** — Untested; falls back to simple links if unsupported
-12. **Frame thumbnail rebuild** — Only works for MP4 with moov at start of file
+11. **Android Firefox GM_download** — Auto-detected; falls back to browser links if unsupported (20s timeout)
+12. **Frame thumbnail rebuild** — Only works for MP4 with moov at start of file; crossOrigin fallback for up.shahvani.com
+13. **Saved videos list tested on jsdom** — Not verified on real site/Android yet
 
 ---
 
 ## Next Steps
 
 1. ✅ Run `node --check src/shahvani-ultra-lite.user.js` (syntax check)
-2. ✅ Run `node build.js` (create dist/ and versions/v3.6.3.user.js)
-3. ✅ Create release ZIP backup in `backups/releases/v3.6.3.user.js.zip` with SHA256
-4. ✅ Create git bundle in `backups/git-bundles/v3.6.3.bundle` and verify
+2. ✅ Run `node build.js` (create dist/ and versions/v3.6.4.user.js)
+3. ✅ Create release ZIP backup in `backups/releases/v3.6.4.user.js.zip` with SHA256
+4. ✅ Create git bundle in `backups/git-bundles/v3.6.4.bundle` and verify
 5. ✅ Update `BACKUP_MANIFEST.md` and `PROJECT_STATUS.md`
-6. ✅ `git add . && git commit -m "v3.6.3: 11 keyboard shortcuts, persistent cross-origin thumbnails, per-page selection, direct download queue, parallel GM_download, retry failed, circuit breaker, up.shahvani.com probe 24s, @connect *" && git tag v3.6.3`
+6. ⏳ `git add . && git commit -m "v3.6.4: Saved videos list, sturdier thumbnails on Android, fixed Android downloads with auto-detect, download method setting, IndexedDB v4 savedThumbs, diagnostics" && git tag v3.6.4`
 7. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey)
-8. ✅ **Pushed to GitHub: 2026-11-24**
+8. ⏳ User approval → push to GitHub
 
 ---
 
-**v3.6.3 RELEASED** — All steps complete. Pushed to GitHub. Awaiting manual test on Firefox + Tampermonkey.
+**v3.6.4 PREPARED** — Syntax check, build, backups complete. Awaiting commit, tag, manual test, and push.
