@@ -144,8 +144,8 @@ Changes not staged for commit:
 - v3.6.1 rolled back: 2026-11-23 (force push complete)
 - Full history preserved
 - **v3.6.1 pushed to GitHub: 2026-11-23**
-- v3.6.2 ready for push after manual test approval
-- v3.6.3 ready for push after manual test approval
+- v3.6.2 pushed to GitHub: 2026-11-24
+- **v3.6.3 pushed to GitHub: 2026-11-24**
 
 ---
 
@@ -173,10 +173,10 @@ Changes not staged for commit:
 3. ✅ Create release ZIP backup in `backups/releases/v3.6.3.user.js.zip` with SHA256
 4. ✅ Create git bundle in `backups/git-bundles/v3.6.3.bundle` and verify
 5. ✅ Update `BACKUP_MANIFEST.md` and `PROJECT_STATUS.md`
-6. ⏳ `git add . && git commit -m "v3.6.3: 11 keyboard shortcuts, persistent cross-origin thumbnails, per-page selection, direct download queue, parallel GM_download, retry failed, circuit breaker, up.shahvani.com probe 24s, @connect *" && git tag v3.6.3`
+6. ✅ `git add . && git commit -m "v3.6.3: 11 keyboard shortcuts, persistent cross-origin thumbnails, per-page selection, direct download queue, parallel GM_download, retry failed, circuit breaker, up.shahvani.com probe 24s, @connect *" && git tag v3.6.3`
 7. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey)
-8. ⏳ User approval → push to GitHub
+8. ✅ **Pushed to GitHub: 2026-11-24**
 
 ---
 
-**v3.6.3 PREPARED** — Syntax check, build, backups complete. Awaiting commit, tag, manual test, and push.
+**v3.6.3 RELEASED** — All steps complete. Pushed to GitHub. Awaiting manual test on Firefox + Tampermonkey.
