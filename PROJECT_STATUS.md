@@ -124,8 +124,8 @@ Changes not staged for commit:
 	new file:   versions/v3.6.2.user.js
 ```
 
-**Last commit**: `e740f13` — "v3.6.1: Fix lock-card size, Download tab live info, persistent cache, Release stops all, GM_download, Update URLs"
-**Tag**: `v3.6.1` (points to e740f13)
+**Last commit**: `b387b52` — "v3.6.5: Fixed auto-download/data waste, Android thumbnails (luminance/sync/seek), live preview for opened videos on Android (max 2, auto-caches), removed autoThumbs/elementDuration, thumbs only after user opens video"
+**Tag**: `v3.6.5` (points to b387b52, force updated)
 
 ---
 
@@ -153,7 +153,7 @@ Changes not staged for commit:
 - v3.6.2 pushed to GitHub: 2026-11-24
 - **v3.6.3 pushed to GitHub: 2026-11-24**
 - **v3.6.4 pushed to GitHub: 2026-11-24**
-- **v3.6.5 pushed to GitHub: 2026-11-25**
+- **v3.6.5 pushed to GitHub: 2026-11-25** (force updated with live preview fix)
 
 ---
 
@@ -186,7 +186,7 @@ Changes not staged for commit:
 5. ✅ Update `BACKUP_MANIFEST.md` and `PROJECT_STATUS.md`
 6. ✅ `git add . && git commit -m "v3.6.5: Fixed auto-download/data waste, Android thumbnails (luminance/sync/seek), live preview for opened videos on Android (max 2, auto-caches), removed autoThumbs/elementDuration, thumbs only after user opens video" && git tag v3.6.5`
 7. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey)
-8. ⏳ Push to GitHub (awaiting user approval)
+8. ✅ Push to GitHub (force updated v3.6.5 tag with live preview fix)
 
 ---
 
