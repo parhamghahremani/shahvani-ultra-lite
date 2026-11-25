@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Shahvani Ultra Lite
 // @namespace    local.shahvani.ultralite
-// @version      3.6.4
-// @description  Shahvani Ultra Lite 3.6.4 (saved videos list, sturdier thumbnails + downloads on Firefox for Android, keyboard shortcuts): tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
+// @version      3.6.5
+// @description  Shahvani Ultra Lite 3.6.5 (live thumbnails without canvas for Firefox for Android, saved videos list, keyboard shortcuts): tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
 // @author       parham
 // @homepageURL  https://github.com/parhamghahremani
 // @updateURL    https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/src/shahvani-ultra-lite.user.js
@@ -22,7 +22,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '3.6.4';
+  const VERSION = '3.6.5';
 
   // v3.6.1: a video / audio / image opened on its own (e.g. a direct up.shahvani.com link in a tab) is the browser's own
   // viewer, not a page: nothing to lock, nothing to patch.
@@ -148,8 +148,7 @@
     shortcuts: true,
 
     // v3.6.4
-    dlMethod: 'auto',     // auto | link (browser link / blob, no Tampermonkey downloader) | gm (Tampermonkey downloader first)
-    autoThumbs: true      // Download tab: make a thumbnail for a row that has none (one picture at a time, cached)
+    dlMethod: 'auto'      // auto | link (browser link / blob, no Tampermonkey downloader) | gm (Tampermonkey downloader first)
   });
 
   const ENUMS = {
@@ -902,7 +901,7 @@
       dlCopy: 'Copy Selected Links ({n})',
       dlConfirm: 'Send {n} downloads? Tap again',
       dlEmpty: 'No videos found on this page.',
-      dlNote: 'Downloads go straight into the queue - no confirmation, one video or many. Several run at once; a failed one is listed in red with its reason and can be retried. Download method: Auto picks what works on your device (Android: the Tampermonkey downloader is tried first and dropped for the session if it does not start a file), Browser = plain links / memory, Tampermonkey = its downloader first. up.shahvani.com always needs Tampermonkey (allow its permission prompt once: Always allow all domains). Only videos of THIS page are listed - use the bookmark icon to keep one for later.',
+      dlNote: 'Nothing is downloaded by itself: thumbnails exist only for videos you opened (they are then cached), and size / duration come from a few KB of the file header. Downloads go straight into the queue - no confirmation, one video or many. Several run at once; a failed one is listed in red with its reason and can be retried. Download method: Auto picks what works on your device (Android: the Tampermonkey downloader is tried first and dropped for the session if it does not start a file), Browser = plain links / memory, Tampermonkey = its downloader first. up.shahvani.com always needs Tampermonkey (allow its permission prompt once: Always allow all domains). Only videos of THIS page are listed - use the bookmark icon to keep one for later.',
       dlOffPage: 'Not on this page',
       dlStream: 'Stream playlist: no direct file',
       dlNoLink: 'No usable link',
@@ -972,14 +971,15 @@
       dlMethodAuto: 'Auto',
       dlMethodLink: 'Browser',
       dlMethodGm: 'Tampermonkey',
-      autoThumbs: 'Make missing thumbnails',
-      autoThumbsD: 'Download tab: a row without a picture gets one (a few hundred KB, one at a time), then it is cached for good.',
       viaTm: 'Tampermonkey',
       viaLink: 'browser link',
       viaBlob: 'Tampermonkey memory',
       viaFetch: 'page',
       scSave: 'Save the selected videos',
-      scSaved: 'Open / close the saved list'
+      scSaved: 'Open / close the saved list',
+      dlMakeThumbs: 'Make thumbnails of opened videos',
+      stThumbsMaking: 'Making thumbnails for {n} opened video(s)...',
+      stThumbsNone: 'No opened video without a thumbnail. Open a video first (tap it, or use Unlock & Load).'
     },
     fa: {
       brand: 'اولترا لایت',
@@ -1197,7 +1197,7 @@
       dlCopy: 'کپی لینک انتخاب‌شده‌ها ({n})',
       dlConfirm: 'ارسال {n} دانلود؟ دوباره لمس کنید',
       dlEmpty: 'ویدیویی در این صفحه پیدا نشد.',
-      dlNote: 'دانلودها مستقیم و بدون تأیید وارد صف می‌شوند، چه یک ویدیو چه چندتا. چند دانلود هم‌زمان اجرا می‌شود و دانلود ناموفق با دلیلش قرمز نمایش داده می‌شود و قابل تلاش دوباره است. روش دانلود: «خودکار» آنچه روی دستگاه شما کار می‌کند را انتخاب می‌کند (اندروید: اول دانلودر Tampermonkey امتحان می‌شود و اگر فایلی شروع نکرد تا پایان نشست کنار گذاشته می‌شود)، «مرورگر» = لینک ساده / حافظه، «Tampermonkey» = اول دانلودر آن. ویدیوهای up.shahvani.com همیشه به Tampermonkey نیاز دارند (پنجره‌ی اجازه‌ی آن را یک‌بار تأیید کنید: Always allow all domains). فقط ویدیوهای همین صفحه فهرست می‌شوند - با آیکون نشانک یکی را برای بعد نگه دارید.',
+      dlNote: 'هیچ چیز خودکار دانلود نمی‌شود: تامبنیل فقط برای ویدیوهایی که باز کرده‌اید ساخته و کش می‌شود و حجم و مدت‌زمان از چند کیلوبایت ابتدای فایل خوانده می‌شود. دانلودها مستقیم و بدون تأیید وارد صف می‌شوند، چه یک ویدیو چه چندتا. چند دانلود هم‌زمان اجرا می‌شود و دانلود ناموفق با دلیلش قرمز نمایش داده می‌شود و قابل تلاش دوباره است. روش دانلود: «خودکار» آنچه روی دستگاه شما کار می‌کند را انتخاب می‌کند (اندروید: اول دانلودر Tampermonkey امتحان می‌شود و اگر فایلی شروع نکرد تا پایان نشست کنار گذاشته می‌شود)، «مرورگر» = لینک ساده / حافظه، «Tampermonkey» = اول دانلودر آن. ویدیوهای up.shahvani.com همیشه به Tampermonkey نیاز دارند (پنجره‌ی اجازه‌ی آن را یک‌بار تأیید کنید: Always allow all domains). فقط ویدیوهای همین صفحه فهرست می‌شوند - با آیکون نشانک یکی را برای بعد نگه دارید.',
       dlOffPage: 'در این صفحه نیست',
       dlStream: 'پلی‌لیست استریم: فایل مستقیم ندارد',
       dlNoLink: 'لینک قابل‌استفاده ندارد',
@@ -1267,14 +1267,15 @@
       dlMethodAuto: 'خودکار',
       dlMethodLink: 'مرورگر',
       dlMethodGm: 'Tampermonkey',
-      autoThumbs: 'ساخت تامبنیل‌های ناقص',
-      autoThumbsD: 'تب دانلود: ردیف بدون تصویر یک تصویر می‌گیرد (چند صد کیلوبایت، یکی‌یکی) و برای همیشه کش می‌شود.',
       viaTm: 'Tampermonkey',
       viaLink: 'لینک مرورگر',
       viaBlob: 'حافظه‌ی Tampermonkey',
       viaFetch: 'صفحه',
       scSave: 'ذخیره‌ی ویدیوهای انتخاب‌شده',
-      scSaved: 'باز / بستن فهرست ذخیره‌شده‌ها'
+      scSaved: 'باز / بستن فهرست ذخیره‌شده‌ها',
+      dlMakeThumbs: 'ساخت تامبنیل ویدیوهای باز‌شده',
+      stThumbsMaking: 'در حال ساخت تامبنیل برای {n} ویدیوی باز‌شده...',
+      stThumbsNone: 'ویدیوی بازشده‌ی بدون تامبنیل نیست. اول یک ویدیو را باز کنید (روی آن بزنید یا «باز کردن و بارگذاری» را بزنید).'
     }
   };
 
@@ -2530,7 +2531,7 @@
    * of the file and needs no CORS permission. Last resort when the Range probe cannot read (or understand) a video.
    * @returns {Promise<number>} seconds, 0 if unknown (or stopped through the signal)
    */
-  function elementDuration(url, signal) {
+  function elementDuration(url, signal) {      // NOT used by any automatic path (kept for tests only)
     return new Promise(resolve => {
       let video = null;
       let done = false;
@@ -2563,7 +2564,7 @@
    *   1. HEAD (no body)         -> size, and whether Range is supported
    *   2. tiny Range request     -> duration from the container header (and size if HEAD was blocked); another
    *                                origin through the manager ONLY after HEAD confirmed "Accept-Ranges: bytes"
-   *   3. detached <video>       -> duration from the browser itself (needs no CORS)
+   *   (v3.6.5: the detached <video> step was removed - it could download the whole file)
    * Never throws for "nobody could tell": the result is then { size: 0, duration: 0 }. A stop (script Off) throws AbortError.
    */
   async function probeVideo(url) {
@@ -2612,12 +2613,9 @@
     }
     if (stopped) throw new DOMException('Aborted', 'AbortError');
 
-    if (!(result.duration > 0)) {
-      const ctl2 = new AbortController();
-      state.probeControllers.add(ctl2);
-      try { result.duration = await elementDuration(url, ctl2.signal); } finally { state.probeControllers.delete(ctl2); }
-      if (ctl2.signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    }
+    // v3.6.5: NO detached <video> any more. It pointed the browser at the real file, and a host without Range support (or
+    // Firefox for Android, which ignores preload) then read the whole video - again at every retry. Only header reads
+    // (16 KB + 8 KB) are made by themselves; a duration that stays unknown is filled in when the video is opened.
     if (!(result.size > 0) && !(result.duration > 0)) diagNote('probe', url, 'nothing could be read');
     return result;
   }
@@ -3721,7 +3719,7 @@
       probe: { mode: probeMode(), requests: state.probeCount, bytesRead: state.probeBytes },
       manager: { handler: gmHandler(), download: !!GM_FN.download, request: !!GM_FN.request, downloadMode: gmMode(), downloaderHealth: gmDlHealth, recent: diagLog },
       downloads: dlLog,
-      thumbs: { ...thumbStats, cached: thumbCache.size, rescueQueued: rescueCount, idb: idbHealth },
+      thumbs: { ...thumbStats, cached: thumbCache.size, rescueQueued: rescueCount, idb: idbHealth, canvasBlocked: thumbsBlocked(), why: thumbWhy },
       saved: { count: saved.size },
       settings
     }, null, 1);
@@ -4057,7 +4055,7 @@
   const LOAD_ALL_HOLD_MS = 30000;     // v3.6.1: after Unlock & Load All the site cannot start playback for this long (or until the first tap on the page)
   const THUMB_MAX_SIDE = 240;         // longest side of a stored thumbnail (the whole picture, never cropped)
   const THUMB_MAX = 150;
-  const THUMB_VIDEO_BYTES = 3 * 1048576;   // v3.6.3: first bytes of a cross-origin video, used once to re-make an exportable thumbnail
+  const THUMB_VIDEO_BYTES = 1572864;         // v3.6.3: first bytes of a cross-origin video, used once to re-make an exportable thumbnail
   const THUMB_JPEG_QUALITY = 0.72;
   const ROW_FLUSH_MS = 120;           // rows are repainted at most this often
   const ROW_POLL_MS = 1500;           // while the Download tab is open: pick up new videos / decoded frames
@@ -4153,24 +4151,48 @@
       const c = probe.getContext('2d', { willReadFrequently: true });
       c.drawImage(canvas, 0, 0, 24, 24);
       const d = c.getImageData(0, 0, 24, 24).data;
-      let alpha = 0, lum = 0, bright = 0;
+      let alpha = 0, sum = 0, sumSq = 0;
       for (let i = 0; i < d.length; i += 4) {
         alpha += d[i + 3];
-        const l = d[i] + d[i + 1] + d[i + 2];
-        lum += l;
-        if (l > 45) bright++;
+        const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        sum += l; sumSq += l * l;
       }
+      const mean = sum / 576;
+      const std = Math.sqrt(Math.max(0, sumSq / 576 - mean * mean));
+      // v3.6.5: transparent, or flat and dark (a black / not-yet-painted frame, also the "limited range" black of a decoder), or flat white
       if (alpha / 576 < 40) return 'blank';
-      if (lum / 576 / 3 < 4 && bright < 4) return 'blank';
+      if (mean < 26 && std < 10) return 'blank';
+      if (mean > 245 && std < 4) return 'blank';
       return 'ok';
     } catch (_) { return 'unknown'; }
   }
 
-  const thumbStats = { captured: 0, blank: 0, tainted: 0, rescued: 0, failed: 0 };
+  const thumbStats = { captured: 0, blank: 0, tainted: 0, rescued: 0, failed: 0, unpainted: 0, seeked: 0, seekFail: 0 };
+  
+  /**
+   * v3.6.5: can pixels be read back from a canvas at all? (Firefox for Android: hardware-decoded video frames come out blank,
+   * and "resist fingerprinting" returns blank canvases.) When not, no canvas route is tried and a live preview is used.
+   */
+  let canvasBlockedCache = null;
+  function thumbsBlocked() {
+    if (canvasBlockedCache !== null) return canvasBlockedCache;
+    let blocked = true;
+    try {
+      const c = document.createElement('canvas');
+      c.width = 4; c.height = 4;
+      const x = c.getContext('2d');
+      x.fillStyle = '#ff0000';
+      x.fillRect(0, 0, 4, 4);
+      const d = x.getImageData(0, 0, 4, 4).data;
+      blocked = !(d[0] > 200 && d[1] < 60 && d[2] < 60 && d[3] > 200);
+    } catch (_) { blocked = true; }
+    canvasBlockedCache = blocked;
+    return blocked;
+  }
 
-  function commitThumb(key, url, canvas, kind, remote) {
+  function commitThumb(key, url, canvas, kind, remote, early) {
     thumbCache.delete(key);
-    thumbCache.set(key, { url, canvas: url ? null : canvas, kind, remote: !!remote });
+    thumbCache.set(key, { url, canvas: url ? null : canvas, kind, remote: !!remote, early: !!early });
     while (thumbCache.size > THUMB_MAX) thumbCache.delete(thumbCache.keys().next().value);
     if (url) { idbSaveThumb(key, url, kind, remote); savedNoteThumb(key, url, remote); }
     queueRowUpdate();
@@ -4186,22 +4208,27 @@
    * A poster thumbnail is never replaced by a frame.
    * @returns {boolean} true when nothing more is to be tried for this capture
    */
-  function storeThumb(key, source, sw, sh, kind, origin) {
+  function storeThumb(key, source, sw, sh, kind, origin, pos) {
     if (!key || !(sw > 0 && sh > 0)) return false;
     const old = thumbCache.get(key);
     if (old && old.kind === 'poster' && !old.remote && kind !== 'poster') return true;
     if (old && old.kind === 'poster' && !old.remote && old.url && kind === 'poster') return true;
+    if (thumbsBlocked()) {                       // v3.6.5: no pixel can be read here - a poster is kept by its address, a frame is shown live
+      if (kind === 'poster' && origin && !(old && old.url)) commitThumb(key, origin, null, 'poster', true);
+      return true;
+    }
     try {
       const canvas = scaledCanvas(source, sw, sh);
       if (canvasState(canvas) === 'blank') { thumbStats.blank++; return false; }
       let url = '';
       try { url = canvas.toDataURL('image/jpeg', THUMB_JPEG_QUALITY); } catch (_) { url = ''; }
       if (url && !/^data:image\//.test(url)) url = '';
-      if (url) { thumbStats.captured++; commitThumb(key, url, canvas, kind, false); return true; }
+      const early = kind === 'frame' && !(pos >= 1);        // a frame from the first second is replaced by a later one (the opening is often black)
+      if (url) { thumbStats.captured++; commitThumb(key, url, canvas, kind, false, early); return true; }
       thumbStats.tainted++;
       if (kind === 'poster' && origin && !(old && old.url)) commitThumb(key, origin, null, 'poster', true);
-      else if (kind !== 'poster' && !IS_ANDROID) commitThumb(key, '', canvas, kind, false);
-      if (origin) queueRescue(key, kind, origin, '');
+      else if (kind !== 'poster') commitThumb(key, '', canvas, kind, false, early);   // v3.6.5: also on Android (it was skipped there: no thumbnail at all)
+      if (origin && !(old && old.url && !old.remote)) queueRescue(key, kind, origin, '');
       return true;
     } catch (_) { return false; }
   }
@@ -4391,9 +4418,7 @@
       if (!canvas && !isCrossOrigin(job.origin)) { try { canvas = await blobImageToCanvas(await fetchBlobSimple(job.origin)); } catch (e) { why.push('fetch: ' + errCode(e)); } }
       if (!canvas && GM_FN.request && !gmHostBlocked(job.origin)) { try { canvas = await blobImageToCanvas(await gmGetBlob(job.origin, 0)); } catch (e) { why.push('manager: ' + errCode(e)); } }
     } else {
-      canvas = await videoToCanvas(job.origin, { cors: true, timeout: 14000 });
-      if (!canvas) why.push('page element: no CORS answer or no frame');
-      if (!canvas && GM_FN.request && !gmHostBlocked(job.origin)) {
+      if (GM_FN.request && !gmHostBlocked(job.origin)) {
         try { canvas = await blobVideoToCanvas(await gmGetBlob(job.origin, THUMB_VIDEO_BYTES), job.origin); } catch (e) { why.push('manager: ' + errCode(e)); }
       }
     }
@@ -4411,7 +4436,8 @@
     }
     thumbStats.failed++;
     diagNote('thumb', job.origin, why.join(' | ') || 'no usable picture');
-    if (job.kind === 'poster' && job.fallback) queueRescue(job.key, 'frame', job.fallback, '');
+    if (job.kind === 'poster' && !thumbCache.has(job.key)) commitThumb(job.key, job.origin, null, 'poster', true);   // a poster is shown by address at least
+    else queueRowUpdate();
   }
 
   function pumpRescue() {
@@ -4426,6 +4452,8 @@
 
   function queueRescue(key, kind, origin, fallback) {
     if (!key || !origin || !/^https?:/i.test(origin)) return;
+    if (kind === 'poster' && thumbsBlocked()) { if (!thumbCache.has(key)) commitThumb(key, origin, null, 'poster', true); return; }
+    if (kind === 'frame' && thumbsBlocked()) return;
     const tag = kind + ':' + key;
     if (rescueTried.has(tag) || rescueCount >= RESCUE_CAP) return;
     rescueTried.add(tag);
@@ -4434,16 +4462,117 @@
     pumpRescue();
   }
 
+  const thumbWhy = [];
+  function noteWhy(text) {
+    if (thumbWhy.length && thumbWhy[thumbWhy.length - 1].endsWith(text)) return;
+    thumbWhy.push(new Date().toISOString().slice(11, 19) + ' ' + text);
+    while (thumbWhy.length > 10) thumbWhy.shift();
+  }
+
+  /** true when the canvas would be tainted by this video (cross-origin without CORS): its pixels cannot be read back */
+  function isTaintedSource(video) {
+    try {
+      const c = document.createElement('canvas');
+      c.width = 1; c.height = 1;
+      const x = c.getContext('2d');
+      x.drawImage(video, 0, 0, 1, 1);
+      x.getImageData(0, 0, 1, 1);
+      return false;
+    } catch (_) { return true; }
+  }
+
+  /**
+   * v3.6.5: Firefox for Android often loads only the METADATA of an opened video (the duration is known, readyState stays 1):
+   * no frame is ever decoded, so nothing can be drawn. A short seek makes the browser decode one frame of the part it
+   * needs (a few hundred KB of a video the person already opened); the frame is taken and the position is put back.
+   * Once per video, one video at a time, never while the video plays.
+   */
+  const seekTried = new WeakSet();
+  const seekQueue = [];
+  let seekBusy = false;
+
+  function pumpSeek() {
+    if (seekBusy || !seekQueue.length) return;
+    const [video, entry] = seekQueue.shift();
+    if (!video.isConnected && !(entry && entry.element === video)) { window.setTimeout(pumpSeek, 0); return; }
+    seekBusy = true;
+    const orig = video.currentTime || 0;
+    let finished = false;
+    let timer = 0;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      window.clearTimeout(timer);
+      video.removeEventListener('seeked', onSeeked);
+      try { if (Math.abs((video.currentTime || 0) - orig) > 0.05) video.currentTime = orig; } catch (_) {}
+      seekBusy = false;
+      window.setTimeout(pumpSeek, 400);
+    };
+    const grab = () => {
+      if (finished) return;
+      thumbStats.seeked++;
+      if (!captureAny(video, entry)) thumbStats.seekFail++;
+      finish();
+    };
+    const onSeeked = () => {
+      if (typeof video.requestVideoFrameCallback === 'function') { video.requestVideoFrameCallback(grab); window.setTimeout(grab, 900); }
+      else window.setTimeout(grab, 300);
+    };
+    video.addEventListener('seeked', onSeeked, { once: true });
+    timer = window.setTimeout(() => { noteWhy('seek-to-decode timed out'); finish(); }, 8000);
+    try {
+      const d = Number.isFinite(video.duration) ? video.duration : 0;
+      const at = d > 0 ? (d < 2 ? d / 2 : Math.min(Math.max(1, d * 0.05), Math.max(0, d - 0.5), 3)) : 1;
+      video.currentTime = at;
+    } catch (err) { noteWhy('seek failed: ' + (err && err.name)); finish(); }
+  }
+
+  function decodeBySeek(video, entry, wait) {
+    if (!(video instanceof HTMLVideoElement) || seekTried.has(video)) return;
+    const go = () => {
+      if (seekTried.has(video) || video.readyState >= 2 || video.readyState < 1 || !video.paused || video.ended) return;
+      if ((video.currentTime || 0) > 0.5) return;                    // it is being watched / resumed: decoding happens by itself
+      const key = keyOfVideo(video, entry || videoStates.get(video));
+      const cur = key ? thumbCache.get(key) : null;
+      if (!key || (cur && !cur.early)) return;
+      seekTried.add(video);
+      seekQueue.push([video, entry || videoStates.get(video)]);
+      pumpSeek();
+    };
+    if (wait > 0) window.setTimeout(go, wait); else go();
+  }
+
   /** A decoded frame of any <video> of the page (locked-and-opened, opened by the site, or the script is Off). */
   const blankTries = new WeakMap();
+  const goodFrame = new WeakSet();     // videos whose thumbnail was taken after the first second
   function captureAny(video, entry) {
-    if (!(video instanceof HTMLVideoElement) || video.readyState < 2 || !(video.videoWidth > 0)) return false;
+    if (!(video instanceof HTMLVideoElement)) return false;
+    if (video.readyState < 2 || !(video.videoWidth > 0)) {
+      noteWhy('no decoded frame yet (readyState ' + video.readyState + ')');
+      if (video.readyState >= 1) decodeBySeek(video, entry, 1500);
+      return false;
+    }
     const key = keyOfVideo(video, entry || videoStates.get(video));
     if (!key) return false;
     const old = thumbCache.get(key);
     if (old && old.kind === 'poster' && !old.remote) return true;
-    const ok = storeThumb(key, video, video.videoWidth, video.videoHeight, 'frame', videoURLOf(video, entry || videoStates.get(video)));
-    if (!ok) {                                   // nothing painted yet (Android): look again when a frame is presented, and a little later
+    if (old && old.kind === 'frame' && !old.early) return true;     // a finished picture exists (saved or in memory): nothing more to do
+    const pos = video.currentTime || 0;
+    // a tainted canvas cannot be checked for black: do not draw it before Firefox has really painted a frame
+    // (an element that is not on screen paints nothing). A readable canvas is checked for black after drawing instead.
+    const painted = typeof video.mozPaintedFrames === 'number' ? video.mozPaintedFrames : -1;
+    if (painted === 0 && isTaintedSource(video)) {
+      thumbStats.unpainted++;
+      noteWhy('cross-origin frame not painted yet (mozPaintedFrames 0)');
+      const n = (blankTries.get(video) || 0) + 1;
+      blankTries.set(video, n);
+      if (n <= 12) window.setTimeout(() => captureAny(video, entry), 500 * Math.min(n, 6));
+      return false;
+    }
+    const ok = storeThumb(key, video, video.videoWidth, video.videoHeight, 'frame', videoURLOf(video, entry || videoStates.get(video)), pos);
+    if (ok && pos >= 1) goodFrame.add(video);
+    if (!ok) {                                   // blank (Android): look again when a frame is presented, and a little later
+      noteWhy('frame looked blank / black');
       const n = (blankTries.get(video) || 0) + 1;
       blankTries.set(video, n);
       if (n <= 8) {
@@ -4478,14 +4607,20 @@
     const video = event.target;
     if (!(video instanceof HTMLVideoElement)) return;
     if (event.type === 'loadeddata') captureAny(video);
-    else if (event.type === 'playing' || event.type === 'seeked') {     // v3.6.3: a frame that was blank at 'loadeddata' is caught here
+    else if (event.type === 'loadedmetadata') { if (video.readyState < 2) decodeBySeek(video, videoStates.get(video), 1500); }
+    else if (event.type === 'timeupdate') {                              // v3.6.5: the frame after the first second (the opening is often black)
+      if (video.currentTime < 1.2 || goodFrame.has(video)) return;
+      captureAny(video);
+      return;
+    } else if (event.type === 'playing' || event.type === 'seeked' || event.type === 'pause') {   // a frame that was blank earlier is caught here
       const key = keyOfVideo(video, videoStates.get(video));
-      if (key && !thumbCache.has(key)) captureAny(video);
+      const cur = key ? thumbCache.get(key) : null;
+      if (key && (!cur || cur.early || (!cur.url && cur.kind === 'frame'))) captureAny(video);
       return;
     }
     noteVideoDuration(video);
   }
-  for (const type of ['loadeddata', 'loadedmetadata', 'durationchange', 'playing', 'seeked']) document.addEventListener(type, onMediaEvent, true);
+  for (const type of ['loadeddata', 'loadedmetadata', 'durationchange', 'playing', 'seeked', 'pause', 'timeupdate']) document.addEventListener(type, onMediaEvent, true);
 
   /** Frames / durations of videos that were already decoded before we looked (the page opened them, or the script is Off). */
   function sweepVideos() {
@@ -4493,7 +4628,23 @@
       if (video.readyState < 1) continue;
       noteVideoDuration(video);
       if (video.readyState >= 2) captureAny(video);
+      else decodeBySeek(video, videoStates.get(video), 0);
     }
+  }
+
+  /** The button "Make thumbnails of opened videos": one more try for every video of the page that holds data but has no picture. */
+  function makeThumbsNow() {
+    let n = 0;
+    for (const video of document.querySelectorAll('video')) {
+      if (video.readyState < 1) continue;
+      const key = keyOfVideo(video, videoStates.get(video));
+      const cur = key ? thumbCache.get(key) : null;
+      if (!key || (cur && !cur.early)) continue;
+      n++;
+      blankTries.delete(video);
+      if (video.readyState >= 2) captureAny(video); else { seekTried.delete(video); decodeBySeek(video, videoStates.get(video), 0); }
+    }
+    setStatus(n ? 'stThumbsMaking' : 'stThumbsNone', { n }, true);
   }
 
   /* ---- duration / size knowledge ---- */
@@ -5153,7 +5304,6 @@
     });
     const th = thumbCache.get(rec.key);
     if (th && th.url) savedThumbPut(rec.key, th.url, th.remote);
-    else if (settings.autoThumbs) queueRescue(rec.key, 'frame', info.url, '');
     savedPersist();
     return true;
   }
@@ -5335,9 +5485,6 @@
   function savedWarm() {
     const recs = savedList().map(item => ({ key: item.k, live: true }));
     Promise.all([savedThumbsLoad(), hydrateRows(recs)]).then(() => {
-      for (const item of savedList()) {
-        if (!thumbCache.has(item.k) && !savedThumbs.has(item.k) && settings.autoThumbs && linkInfo(item.u).ok) queueRescue(item.k, 'frame', item.u, '');
-      }
       paintSavedRows();
       savedProbeNext();
     });
@@ -5581,7 +5728,7 @@
     if (cached.url) {
       const img = document.createElement('img');
       img.alt = '';
-      img.decoding = 'async';
+      img.decoding = 'sync';       // v3.6.5: 'async' left the black frame of the box visible while Android decoded the picture
       img.draggable = false;
       img.src = cached.url;
       return img;
@@ -5679,11 +5826,8 @@
     const seen = new Set();
     for (const rec of rows) {
       seen.add(rec.key);
-      // v3.6.3: a row without a thumbnail whose video has a poster gets it (small picture, cached) - no need to open the video
-      if (dlHydrateDone.has(rec.key) && !thumbCache.has(rec.key)) {
-        if (rec.poster) queueRescue(rec.key, 'poster', rec.poster, settings.autoThumbs ? rec.url : '');
-        else if (settings.autoThumbs && linkInfo(rec.url).ok) queueRescue(rec.key, 'frame', rec.url, '');
-      }
+      // v3.6.5: no picture is ever fetched for a row by itself. Thumbnails come only from pictures the page has already
+      // loaded (a poster) or from a video the person opened; they are then cached for good.
       const ref = dlUI.rows.get(rec.key);
       if (!ref) { insertRow(rec); continue; }
       if (ref.rec.live !== rec.live || ref.rec.url !== rec.url) {      // left the page / source changed: rebuild this row only
@@ -5759,8 +5903,8 @@
       dlUI.btnRetry, dlUI.err, dlUI.area));
     f.append(h('details', { class: 'dlnote' }, h('summary', { text: t('dlNoteTitle') }), h('div', { class: 'note', text: t('dlNote') }),
       h('div', { class: 'pad' },
-        segment(t('dlMethod'), settings.dlMethod, [['auto', t('dlMethodAuto')], ['link', t('dlMethodLink')], ['gm', t('dlMethodGm')]], v => setOpt('dlMethod', v)),
-        checkRow('autoThumbs', t('autoThumbs'), t('autoThumbsD')))));
+        h('button', { class: 'btn', type: 'button', text: t('dlMakeThumbs'), onclick: makeThumbsNow }),
+        segment(t('dlMethod'), settings.dlMethod, [['auto', t('dlMethodAuto')], ['link', t('dlMethodLink')], ['gm', t('dlMethodGm')]], v => setOpt('dlMethod', v)))));
 
     dlUI.box = h('div', { class: 'dlbox' });
     dlUI.empty = h('div', { class: 'note', text: t('dlEmpty') });
@@ -5938,7 +6082,7 @@
     .dlth { flex: none; align-self: flex-start; box-sizing: border-box; width: clamp(76px, 26vw, 112px); aspect-ratio: 16 / 9;
       border-radius: 8px; overflow: hidden; display: grid; place-items: center;
       background: var(--card); border: 1px solid var(--bd); color: var(--mut); font-size: 18px; cursor: pointer; }
-    .dlth.has { aspect-ratio: auto; background: #000; }
+    .dlth.has { aspect-ratio: auto; background: var(--card); }
     .dlth canvas, .dlth img { display: block; width: 100%; height: auto; max-height: 150px; object-fit: contain;
       pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-user-drag: none; }
     @media (max-width: 380px) { .dlact { flex-direction: column; } }
@@ -6663,7 +6807,7 @@
       state, settings, T, DEFAULTS, KNOWN_AD_HOSTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
       videoStates, activateVideo, releaseInactiveNow, hashKey, videoKeyUrl, isLockedMedia,
       selection, downloadRows, linkInfo, copyRecs, downloadRecs, loadAllVideos, THEME_COLORS,
-      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runDownloadJob, dlQ, retryFailed, pruneSelection, canvasState, queueRescue, hydrateRows, saved, savedSel, savedThumbs, saveRec, toggleSaved, unsaveKey, savedList, idbSaveThumb, lsThumbs, lsSavedThumbs, gmDlHealth, dlLog, thumbStats, openSaved, buildSaved, buildDownload, renderAll, selectionTotals, infoEligible, autoRowInfo, diagLog,
+      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runDownloadJob, thumbsBlocked, captureAny, decodeBySeek, makeThumbsNow, thumbWhy, videoStates, dlQ, retryFailed, pruneSelection, canvasState, queueRescue, hydrateRows, saved, savedSel, savedThumbs, saveRec, toggleSaved, unsaveKey, savedList, idbSaveThumb, lsThumbs, lsSavedThumbs, gmDlHealth, dlLog, thumbStats, openSaved, buildSaved, buildDownload, renderAll, selectionTotals, infoEligible, autoRowInfo, diagLog,
       // Internal test functions
       testSanitize: (input) => sanitize(input, { ...DEFAULTS, customAdHosts: [] }),
       testIsUsableURL: (raw) => isUsableURL(raw),
