@@ -148,6 +148,7 @@
     shortcuts: true,
 
     // v3.6.4
+    livePreview: true,    // v3.6.5: Download tab: a video you OPENED but that has no thumbnail is shown by the browser itself (Android: canvas cannot read its frames)
     dlMethod: 'auto'      // auto | link (browser link / blob, no Tampermonkey downloader) | gm (Tampermonkey downloader first)
   });
 
@@ -978,6 +979,8 @@
       scSave: 'Save the selected videos',
       scSaved: 'Open / close the saved list',
       dlMakeThumbs: 'Make thumbnails of opened videos',
+      livePreview: 'Show opened videos as a live preview',
+      livePreviewD: 'Only for videos you opened and that have no thumbnail yet (Android cannot read their frames). Never for videos you did not open; two at a time, rows on screen only.',
       stThumbsMaking: 'Making thumbnails for {n} opened video(s)...',
       stThumbsNone: 'No opened video without a thumbnail. Open a video first (tap it, or use Unlock & Load).'
     },
@@ -1274,6 +1277,8 @@
       scSave: 'ذخیره‌ی ویدیوهای انتخاب‌شده',
       scSaved: 'باز / بستن فهرست ذخیره‌شده‌ها',
       dlMakeThumbs: 'ساخت تامبنیل ویدیوهای باز‌شده',
+      livePreview: 'نمایش ویدیوهای بازشده به‌صورت پیش‌نمایش زنده',
+      livePreviewD: 'فقط برای ویدیویی که باز کرده‌اید و هنوز تامبنیل ندارد (اندروید نمی‌تواند فریمش را بخواند). هرگز برای ویدیویی که باز نکرده‌اید؛ دوتا دوتا و فقط ردیف‌های روی صفحه.',
       stThumbsMaking: 'در حال ساخت تامبنیل برای {n} ویدیوی باز‌شده...',
       stThumbsNone: 'ویدیوی بازشده‌ی بدون تامبنیل نیست. اول یک ویدیو را باز کنید (روی آن بزنید یا «باز کردن و بارگذاری» را بزنید).'
     }
@@ -3719,7 +3724,7 @@
       probe: { mode: probeMode(), requests: state.probeCount, bytesRead: state.probeBytes },
       manager: { handler: gmHandler(), download: !!GM_FN.download, request: !!GM_FN.request, downloadMode: gmMode(), downloaderHealth: gmDlHealth, recent: diagLog },
       downloads: dlLog,
-      thumbs: { ...thumbStats, cached: thumbCache.size, rescueQueued: rescueCount, idb: idbHealth, canvasBlocked: thumbsBlocked(), why: thumbWhy },
+      thumbs: { ...thumbStats, cached: thumbCache.size, rescueQueued: rescueCount, idb: idbHealth, canvasBlocked: thumbsBlocked(), why: thumbWhy, live: liveThumbs.size, liveDead: liveDead.size, liveActive },
       saved: { count: saved.size },
       settings
     }, null, 1);
@@ -4167,7 +4172,7 @@
     } catch (_) { return 'unknown'; }
   }
 
-  const thumbStats = { captured: 0, blank: 0, tainted: 0, rescued: 0, failed: 0, unpainted: 0, seeked: 0, seekFail: 0 };
+  const thumbStats = { captured: 0, blank: 0, tainted: 0, rescued: 0, failed: 0, unpainted: 0, seeked: 0, seekFail: 0, liveSaved: 0 };
   
   /**
    * v3.6.5: can pixels be read back from a canvas at all? (Firefox for Android: hardware-decoded video frames come out blank,
@@ -4188,6 +4193,126 @@
     } catch (_) { blocked = true; }
     canvasBlockedCache = blocked;
     return blocked;
+  }
+
+  /* ---- v3.6.5: live preview of an OPENED video - the browser paints the frame itself (no canvas needed) ----
+   * Firefox for Android cannot read the frames of a video back through a canvas (blank / black), so a row whose video you
+   * opened but that has no thumbnail shows the video itself: first frame, muted, never played. Only videos that already hold
+   * data are used (rows of videos you never opened stay empty), at most 2 at a time, only rows on screen. As soon as a
+   * readable frame can be taken it is cached for good and the preview is dropped (its connection is released). */
+  const thumbFailed = new Set();     // keys for which no canvas route gave a picture
+  const liveThumbs = new Map();
+  const liveDead = new Set();
+  const liveWait = [];
+  const liveHost = new WeakMap();
+  const LIVE_MAX_ACTIVE = 2;
+  const LIVE_MAX_KEPT = 40;
+  let liveActive = 0;
+  let liveIO = null;
+
+  function wantLive(key, url, poster, opened) {
+    return !!settings.livePreview && !!opened && !poster && !liveDead.has(key) && !thumbCache.has(key) && linkInfo(url).ok
+      && (IS_ANDROID || thumbsBlocked() || thumbFailed.has(key));
+  }
+
+  function liveSlotFree(rec) {
+    window.clearTimeout(rec.timer);
+    if (rec.slot) { rec.slot = false; liveActive--; }
+    while (liveActive < LIVE_MAX_ACTIVE && liveWait.length) liveBegin(liveWait.shift());
+  }
+
+  function liveSrc(rec) { rec.video.src = rec.url + (rec.url.indexOf('#') < 0 ? '#t=0.5' : ''); }
+
+  function liveBegin(rec) {
+    if (rec.began || rec.dead) return;
+    if (liveActive >= LIVE_MAX_ACTIVE) { liveWait.push(rec); return; }
+    rec.began = true;
+    rec.slot = true;
+    liveActive++;
+    rec.timer = window.setTimeout(() => liveSlotFree(rec), 15000);
+    liveSrc(rec);
+  }
+
+  function liveObserve(rec, host) {
+    if (rec.began) return;
+    if (typeof IntersectionObserver !== 'function') { liveBegin(rec); return; }
+    if (!liveIO) {
+      liveIO = new IntersectionObserver(entries => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          const r = liveHost.get(e.target);
+          if (r) { liveIO.unobserve(e.target); liveBegin(r); }
+        }
+      }, { rootMargin: '100px' });
+    }
+    liveHost.set(host, rec);
+    liveIO.observe(host);
+  }
+
+  function liveRelease(rec) {
+    try { rec.video.removeAttribute('src'); NATIVE.load.call(rec.video); } catch (_) {}
+    liveSlotFree(rec);
+    liveThumbs.delete(rec.key);
+    queueRowUpdate();
+  }
+
+  /** A readable preview that has painted is saved as a real thumbnail (it then survives a reload) and released. */
+  function liveTryCapture(rec, attempt) {
+    if (rec.dead || rec.captured || !rec.cors || thumbsBlocked() || !(rec.video.videoWidth > 0)) return;
+    if (typeof rec.video.mozPaintedFrames === 'number' && rec.video.mozPaintedFrames < 1) {
+      if ((attempt || 0) < 5) window.setTimeout(() => liveTryCapture(rec, (attempt || 0) + 1), 600);
+      return;
+    }
+    storeThumb(rec.key, rec.video, rec.video.videoWidth, rec.video.videoHeight, 'frame', '', 1);
+    const got = thumbCache.get(rec.key);
+    if (got && got.url) { rec.captured = true; thumbStats.liveSaved++; liveRelease(rec); }
+    else if ((attempt || 0) < 3) window.setTimeout(() => liveTryCapture(rec, (attempt || 0) + 1), 800);
+  }
+
+  function liveThumbNode(key, url, host) {
+    let rec = liveThumbs.get(key);
+    if (!rec) {
+      if (liveThumbs.size >= LIVE_MAX_KEPT) {
+        const old = liveThumbs.get(liveThumbs.keys().next().value);
+        if (old) liveRelease(old);
+      }
+      const video = document.createElement('video');
+      unsafeVideos.add(video);        // our own lock must not touch it
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.preload = 'metadata';
+      video.crossOrigin = 'anonymous';
+      video.style.aspectRatio = '16 / 9';
+      rec = { key, url, video, cors: true, began: false, slot: false, dead: false, captured: false, timer: 0 };
+      liveThumbs.set(key, rec);
+      video.addEventListener('loadedmetadata', () => { if (video.videoWidth > 0) video.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight; });
+      const painted = () => {
+        liveSlotFree(rec);
+        if (typeof video.requestVideoFrameCallback === 'function') video.requestVideoFrameCallback(() => liveTryCapture(rec, 0));
+        window.setTimeout(() => liveTryCapture(rec, 0), 500);
+      };
+      video.addEventListener('loadeddata', painted);
+      video.addEventListener('seeked', painted);
+      video.addEventListener('error', () => {
+        if (rec.cors) {                // the host sends no CORS headers: show it without CORS (display only, no saved copy)
+          rec.cors = false;
+          video.removeAttribute('crossorigin');
+          liveSrc(rec);
+          return;
+        }
+        rec.dead = true;
+        liveDead.add(key);
+        liveSlotFree(rec);
+        liveThumbs.delete(key);
+        thumbStats.failed++;
+        diagNote('thumb', url, 'live preview failed');
+        queueRowUpdate();
+      });
+    }
+    liveObserve(rec, host);
+    return rec.video;
   }
 
   function commitThumb(key, url, canvas, kind, remote, early) {
@@ -4435,6 +4560,7 @@
       }
     }
     thumbStats.failed++;
+    thumbFailed.add(job.key);
     diagNote('thumb', job.origin, why.join(' | ') || 'no usable picture');
     if (job.kind === 'poster' && !thumbCache.has(job.key)) commitThumb(job.key, job.origin, null, 'poster', true);   // a poster is shown by address at least
     else queueRowUpdate();
@@ -4732,7 +4858,7 @@
         const raw = (entry && entry.poster) || el.getAttribute('poster') || '';
         if (raw && isUsableURL(raw) && !isBlobURL(raw)) poster = new URL(raw, document.baseURI).href;
       } catch (_) {}
-      rows.push({ key, url, index: n, duration, size, live: true, poster });
+      rows.push({ key, url, index: n, duration, size, live: true, poster, opened: el.readyState >= 1 });
     }
     // v3.6.3: only videos of THIS page are listed, selectable, downloadable and copyable (no rows left over from other pages)
     return rows;
@@ -5740,10 +5866,12 @@
   function paintRow(ref) {
     const rec = ref.rec;
     const cached = thumbCache.get(rec.key) || null;
-    if (ref.thumbOf !== cached) {
-      ref.thumbOf = cached;
+    const live = !cached && wantLive(rec.key, rec.url, rec.poster, rec.opened);
+    const sig = cached || (live ? 'live' : null);
+    if (ref.thumbOf !== sig) {
+      ref.thumbOf = sig;
       ref.thumb.textContent = '';
-      const node = cached ? thumbNode(cached) : null;
+      const node = cached ? thumbNode(cached) : (live ? liveThumbNode(rec.key, rec.url, ref.thumb) : null);
       if (node) ref.thumb.append(node); else ref.thumb.textContent = '▶';
       ref.thumb.classList.toggle('has', !!node);    // a real thumbnail decides its own height (full picture, real ratio)
     }
@@ -5904,6 +6032,7 @@
     f.append(h('details', { class: 'dlnote' }, h('summary', { text: t('dlNoteTitle') }), h('div', { class: 'note', text: t('dlNote') }),
       h('div', { class: 'pad' },
         h('button', { class: 'btn', type: 'button', text: t('dlMakeThumbs'), onclick: makeThumbsNow }),
+        checkRow('livePreview', t('livePreview'), t('livePreviewD')),
         segment(t('dlMethod'), settings.dlMethod, [['auto', t('dlMethodAuto')], ['link', t('dlMethodLink')], ['gm', t('dlMethodGm')]], v => setOpt('dlMethod', v)))));
 
     dlUI.box = h('div', { class: 'dlbox' });
@@ -6083,6 +6212,7 @@
       border-radius: 8px; overflow: hidden; display: grid; place-items: center;
       background: var(--card); border: 1px solid var(--bd); color: var(--mut); font-size: 18px; cursor: pointer; }
     .dlth.has { aspect-ratio: auto; background: var(--card); }
+    .dlth video { display: block; width: 100%; height: auto; max-height: 150px; object-fit: contain; background: var(--card); pointer-events: none; }
     .dlth canvas, .dlth img { display: block; width: 100%; height: auto; max-height: 150px; object-fit: contain;
       pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-user-drag: none; }
     @media (max-width: 380px) { .dlact { flex-direction: column; } }
@@ -6807,7 +6937,7 @@
       state, settings, T, DEFAULTS, KNOWN_AD_HOSTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
       videoStates, activateVideo, releaseInactiveNow, hashKey, videoKeyUrl, isLockedMedia,
       selection, downloadRows, linkInfo, copyRecs, downloadRecs, loadAllVideos, THEME_COLORS,
-      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runDownloadJob, thumbsBlocked, captureAny, decodeBySeek, makeThumbsNow, thumbWhy, videoStates, dlQ, retryFailed, pruneSelection, canvasState, queueRescue, hydrateRows, saved, savedSel, savedThumbs, saveRec, toggleSaved, unsaveKey, savedList, idbSaveThumb, lsThumbs, lsSavedThumbs, gmDlHealth, dlLog, thumbStats, openSaved, buildSaved, buildDownload, renderAll, selectionTotals, infoEligible, autoRowInfo, diagLog,
+      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runDownloadJob, liveThumbs, liveDead, wantLive, thumbsBlocked, captureAny, decodeBySeek, makeThumbsNow, thumbWhy, videoStates, dlQ, retryFailed, pruneSelection, canvasState, queueRescue, hydrateRows, saved, savedSel, savedThumbs, saveRec, toggleSaved, unsaveKey, savedList, idbSaveThumb, lsThumbs, lsSavedThumbs, gmDlHealth, dlLog, thumbStats, openSaved, buildSaved, buildDownload, renderAll, selectionTotals, infoEligible, autoRowInfo, diagLog,
       // Internal test functions
       testSanitize: (input) => sanitize(input, { ...DEFAULTS, customAdHosts: [] }),
       testIsUsableURL: (raw) => isUsableURL(raw),

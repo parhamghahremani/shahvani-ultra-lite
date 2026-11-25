@@ -11,7 +11,7 @@
 
 | Version | Date | Status | Key Features |
 |---------|------|--------|--------------|
-| 3.6.5 | 2026-11-25 | **Current** | Fixed auto-download/data waste (removed elementDuration probe, no live preview, no auto thumbs, thumbs only after user opens video), fixed Android black/delayed thumbnails (luminance check, sync decode, seek-to-decode), fixed Android missing thumbnails (tainted frames cached, frame rebuild enabled, mozPaintedFrames wait), removed autoThumbs setting, diagnostics for thumbs |
+| 3.6.5 | 2026-11-25 | **Current** | Fixed auto-download/data waste (removed elementDuration probe, no auto thumbs, thumbs only after user opens video), fixed Android black/delayed thumbnails (luminance check, sync decode, seek-to-decode), fixed Android missing thumbnails (tainted frames cached, frame rebuild enabled, mozPaintedFrames wait), **live preview for opened videos on Android** (max 2, on-screen only, auto-caches as real thumbnail), removed autoThumbs setting, diagnostics for thumbs |
 | 3.6.4 | 2026-11-24 | Archived | Saved videos list (bookmark icon, Alt+Shift+B/S), sturdier thumbnails on Android (auto capture, crossOrigin fallback), fixed Android Firefox downloads (auto-detect TM support, 20s timeout, fallback chain), download method setting (auto/browser/TM), IndexedDB v4 with savedThumbs store, diagnostics for thumbs/downloads |
 | 3.6.3 | 2026-11-24 | Archived | 11 keyboard shortcuts (Alt+Shift+keys), persistent cross-origin thumbnails (IndexedDB), per-page selection scope, direct download queue (no confirmation), parallel GM_download (Android 2/ Desktop 3), retry failed, circuit breaker, up.shahvani.com probe 24s total, @connect * for redirects |
 | 3.6.2 | 2026-11-24 | Archived | Selection totals in Download tab, download failure visible with error codes, Diagnostics manager block, auto size/duration lookup for all rows (no button), cache-first with retry logic (3 tries), up.shahvani.com downloads via GM_download/blob/fallback, Range probe guarded by Accept-Ranges |
@@ -42,7 +42,7 @@
 ## File Inventory
 
 ### Source
-- `src/shahvani-ultra-lite.user.js` — **v3.6.5** (~310KB)
+- `src/shahvani-ultra-lite.user.js` — **v3.6.5** (~315KB)
 
 ### Version Archives (`versions/`)
 | File | Size | Date |
@@ -64,7 +64,7 @@
 | v3.6.2.user.js | ~190KB | 2026-11-24 |
 | v3.6.3.user.js | ~268KB | 2026-11-24 |
 | v3.6.4.user.js | ~302KB | 2026-11-24 |
-| v3.6.5.user.js | ~310KB | 2026-11-25 |
+| v3.6.5.user.js | ~315KB | 2026-11-25 |
 
 ### Backups (`backups/`)
 | Type | Files | Verified |
@@ -78,7 +78,7 @@
 | v3.6.2 | complete | ✅ |
 | v3.6.3 | complete | ✅ |
 | v3.6.4 | complete | ✅ |
-| v3.6.5 | complete | ✅ |
+| v3.6.5 | complete | ✅ SHA256: 68EC344618267235A1A436A44A484053E35F796A1D816E13525CF8E38AA02D3F |
 
 ### Documentation (`docs/`)
 | File | Status |
@@ -184,10 +184,10 @@ Changes not staged for commit:
 3. ✅ Create release ZIP backup in `backups/releases/v3.6.5.user.js.zip` with SHA256
 4. ✅ Create git bundle in `backups/git-bundles/v3.6.5.bundle` and verify
 5. ✅ Update `BACKUP_MANIFEST.md` and `PROJECT_STATUS.md`
-6. ⏳ `git add . && git commit -m "v3.6.5: Fixed auto-download/data waste, Android thumbnails (luminance/sync/seek), removed autoThumbs/elementDuration/live preview, thumbs only after user opens video" && git tag v3.6.5`
+6. ✅ `git add . && git commit -m "v3.6.5: Fixed auto-download/data waste, Android thumbnails (luminance/sync/seek), live preview for opened videos on Android (max 2, auto-caches), removed autoThumbs/elementDuration, thumbs only after user opens video" && git tag v3.6.5`
 7. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey)
-8. ⏳ User approval → push to GitHub
+8. ⏳ Push to GitHub (awaiting user approval)
 
 ---
 
-**v3.6.5 PREPARED** — Syntax check, build, backups complete. Awaiting commit, tag, manual test, and push.
+**v3.6.5 UPDATED** — All local steps complete. Awaiting manual test on Firefox + Tampermonkey, then GitHub push with approval.

@@ -96,7 +96,7 @@ shahvani-ultra-lite/
 - **v3.5.4**: `PROBE_HEAD_BYTES = 16384`, `PROBE_TAIL_BYTES = 8192`, `PROBE_CONCURRENCY = 2`, `PROBE_SESSION_MAX = 120`
 - **v3.6.3**: `PROBE_TOTAL_MS = 24000`, `IS_ANDROID` constant, `DL_CONCURRENCY` (Android 2, Desktop 3)
 - **v3.6.4**: `IDB_VERSION = 4` (savedThumbs store), `GM_DOWNLOAD_TIMEOUT_MS = 20000`, `ANDROID_LINK_GAP_MS = 2000`
-- **v3.6.5**: Removed `elementDuration` probe stage, removed `autoThumbs` setting, removed live preview, thumbnails only after user opens video, sync decode for thumbnails, seek-to-decode for Android metadata-only videos
+- **v3.6.5**: Removed `elementDuration` probe stage, removed `autoThumbs` setting, **live preview for opened videos on Android** (max 2, on-screen only, auto-caches as real thumbnail), thumbnails only after user opens video, sync decode for thumbnails, seek-to-decode for Android metadata-only videos
 
 ### IndexedDB Schema (`IDB_VERSION = 4`)
 - `settings` — key: `main`
