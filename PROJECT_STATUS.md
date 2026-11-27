@@ -1,9 +1,9 @@
 # Project Status — Shahvani Ultra Lite
 
-**Last Updated**: 2026-11-25  
-**Current Version**: 3.6.5  
-**Git Commit**: e740f13 (v3.6.1) — working tree has v3.6.5 changes  
-**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, pushed 2026-11-23)
+**Last Updated**: 2026-11-27  
+**Current Version**: 3.6.6  
+**Git Commit**: b387b52 (v3.6.5) — working tree has v3.6.6 changes  
+**GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public ✅, pushed 2026-11-25)
 
 ---
 
@@ -11,7 +11,8 @@
 
 | Version | Date | Status | Key Features |
 |---------|------|--------|--------------|
-| 3.6.5 | 2026-11-25 | **Current** | Fixed auto-download/data waste (removed elementDuration probe, no auto thumbs, thumbs only after user opens video), fixed Android black/delayed thumbnails (luminance check, sync decode, seek-to-decode), fixed Android missing thumbnails (tainted frames cached, frame rebuild enabled, mozPaintedFrames wait), **live preview for opened videos on Android** (max 2, on-screen only, auto-caches as real thumbnail), removed autoThumbs setting, diagnostics for thumbs |
+| 3.6.6 | 2026-11-27 | **Current** | Stability release: fixed playback seek bugs, saved videos sync across tabs, background activity stopped when panel closed, live preview reliability (cors→blob→plain, max 40, auto-releases), Unlock & Load All uses `preload=metadata` (no auto buffer), removed Ads tab & download method setting, removed seek-decode & Make Thumbnails button, purged black thumbnails, 45 dead translations removed, zero lint errors |
+| 3.6.5 | 2026-11-25 | Archived | Fixed auto-download/data waste (removed elementDuration probe, no auto thumbs, thumbs only after user opens video), fixed Android black/delayed thumbnails (luminance check, sync decode, seek-to-decode), fixed Android missing thumbnails (tainted frames cached, frame rebuild enabled, mozPaintedFrames wait), **live preview for opened videos on Android** (max 2, on-screen only, auto-caches as real thumbnail), removed autoThumbs setting, diagnostics for thumbs |
 | 3.6.4 | 2026-11-24 | Archived | Saved videos list (bookmark icon, Alt+Shift+B/S), sturdier thumbnails on Android (auto capture, crossOrigin fallback), fixed Android Firefox downloads (auto-detect TM support, 20s timeout, fallback chain), download method setting (auto/browser/TM), IndexedDB v4 with savedThumbs store, diagnostics for thumbs/downloads |
 | 3.6.3 | 2026-11-24 | Archived | 11 keyboard shortcuts (Alt+Shift+keys), persistent cross-origin thumbnails (IndexedDB), per-page selection scope, direct download queue (no confirmation), parallel GM_download (Android 2/ Desktop 3), retry failed, circuit breaker, up.shahvani.com probe 24s total, @connect * for redirects |
 | 3.6.2 | 2026-11-24 | Archived | Selection totals in Download tab, download failure visible with error codes, Diagnostics manager block, auto size/duration lookup for all rows (no button), cache-first with retry logic (3 tries), up.shahvani.com downloads via GM_download/blob/fallback, Range probe guarded by Accept-Ranges |
@@ -42,7 +43,7 @@
 ## File Inventory
 
 ### Source
-- `src/shahvani-ultra-lite.user.js` — **v3.6.5** (~315KB)
+- `src/shahvani-ultra-lite.user.js` — **v3.6.6** (~301KB)
 
 ### Version Archives (`versions/`)
 | File | Size | Date |
@@ -65,12 +66,13 @@
 | v3.6.3.user.js | ~268KB | 2026-11-24 |
 | v3.6.4.user.js | ~302KB | 2026-11-24 |
 | v3.6.5.user.js | ~315KB | 2026-11-25 |
+| v3.6.6.user.js | ~301KB | 2026-11-27 |
 
 ### Backups (`backups/`)
 | Type | Files | Verified |
 |------|-------|----------|
-| Releases (ZIP) | v3.5.0–v3.6.5 | ✅ SHA256 recorded |
-| Git Bundles | v3.5.1–v3.6.5 | ✅ `git bundle verify` OK |
+| Releases (ZIP) | v3.5.0–v3.6.6 | ✅ SHA256 recorded |
+| Git Bundles | v3.5.1–v3.6.6 | ✅ `git bundle verify` OK |
 | Pre-Change | v3.5.0–v3.5.4 | ✅ |
 | Manifest | BACKUP_MANIFEST.md | ✅ Complete |
 | v3.6.0 | complete | ✅ |
@@ -79,6 +81,7 @@
 | v3.6.3 | complete | ✅ |
 | v3.6.4 | complete | ✅ |
 | v3.6.5 | complete | ✅ SHA256: 68EC344618267235A1A436A44A484053E35F796A1D816E13525CF8E38AA02D3F |
+| v3.6.6 | complete | ✅ SHA256: A00054A14D4C6B3DA00C79EB685AA30316EBC7A119084B459118046846B330F7 |
 
 ### Documentation (`docs/`)
 | File | Status |
@@ -99,8 +102,8 @@
 |------|--------|
 | CLAUDE.md | ✅ Created |
 | .gitignore | ✅ Created |
-| package.json | ✅ v3.6.5 |
-| README.md | ✅ v3.6.5 |
+| package.json | ✅ v3.6.6 |
+| README.md | ✅ v3.6.6 |
 | playwright.config.js | ✅ Exists |
 | .claude/launch.json | ✅ Exists |
 
@@ -122,6 +125,7 @@ Changes not staged for commit:
 	modified:   package.json
 	new file:   dist/shahvani-ultra-lite.user.js
 	new file:   versions/v3.6.2.user.js
+	new file:   versions/v3.6.6.user.js
 ```
 
 **Last commit**: `b387b52` — "v3.6.5: Fixed auto-download/data waste, Android thumbnails (luminance/sync/seek), live preview for opened videos on Android (max 2, auto-caches), removed autoThumbs/elementDuration, thumbs only after user opens video"
@@ -133,12 +137,13 @@ Changes not staged for commit:
 
 | Test | Status | Notes |
 |------|--------|-------|
-| Syntax check (`node --check`) | ✅ Pass | v3.6.5 |
+| Syntax check (`node --check`) | ✅ Pass | v3.6.6 |
 | Build (`node build.js`) | ✅ Pass | versions/ + dist/ created |
-| Manual test (Firefox + TM) | ⏳ Pending | v3.6.5 features to verify |
+| Manual test (Firefox + TM) | ⏳ Pending | v3.6.6 features to verify |
 | Probe auto mode | ✅ Pass | Range requests only, no video download |
 | Cache persistence | ✅ Pass | Size/duration from IndexedDB on revisit |
 | Numbering stability | ✅ Pass | No duplicates from app-forum-topic |
+| jsdom regression | ✅ Pass | Ads removed, popup blocker works, download browser-only, Load All queue, saved sync, live preview cap, zero seek/background requests |
 
 ---
 
@@ -154,6 +159,7 @@ Changes not staged for commit:
 - **v3.6.3 pushed to GitHub: 2026-11-24**
 - **v3.6.4 pushed to GitHub: 2026-11-24**
 - **v3.6.5 pushed to GitHub: 2026-11-25** (force updated with live preview fix)
+- **v3.6.6 pending push** (awaiting manual test + approval)
 
 ---
 
@@ -174,19 +180,20 @@ Changes not staged for commit:
 13. **Saved videos list tested on jsdom** — Not verified on real site/Android yet
 14. **Duration for up.shahvani.com** — Only available after user opens video or TM reaches domain
 15. **Thumbnails for up.shahvani.com** — Only created after user opens video
+16. **Live preview on real Android/TM** — Not verified on real device; relies on cors→blob→plain fallback chain
 
 ---
 
 ## Next Steps
 
 1. ✅ Run `node --check src/shahvani-ultra-lite.user.js` (syntax check)
-2. ✅ Run `node build.js` (create dist/ and versions/v3.6.5.user.js)
-3. ✅ Create release ZIP backup in `backups/releases/v3.6.5.user.js.zip` with SHA256
-4. ✅ Create git bundle in `backups/git-bundles/v3.6.5.bundle` and verify
+2. ✅ Run `node build.js` (create dist/ and versions/v3.6.6.user.js)
+3. ✅ Create release ZIP backup in `backups/releases/v3.6.6.user.js.zip` with SHA256
+4. ✅ Create git bundle in `backups/git-bundles/v3.6.6.bundle` and verify
 5. ✅ Update `BACKUP_MANIFEST.md` and `PROJECT_STATUS.md`
-6. ✅ `git add . && git commit -m "v3.6.5: Fixed auto-download/data waste, Android thumbnails (luminance/sync/seek), live preview for opened videos on Android (max 2, auto-caches), removed autoThumbs/elementDuration, thumbs only after user opens video" && git tag v3.6.5`
+6. ✅ `git add . && git commit -m "v3.6.6: Stability release — fixed seek bugs, saved videos sync, no background activity, live preview cors/blob/plain, Load All preload=metadata, removed Ads tab/download method/seek-decode, purged black thumbs, 45 dead translations, zero lint" && git tag v3.6.6`
 7. ⏳ Manual test on shahvani.com (Firefox + Tampermonkey)
-8. ✅ Push to GitHub (force updated v3.6.5 tag with live preview fix)
+8. ⏳ Push to GitHub (awaiting manual test + approval)
 
 ---
 

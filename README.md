@@ -4,7 +4,7 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 
 **Author:** parham  
 **Homepage:** https://github.com/parhamghahremani  
-**Version:** 3.6.5
+**Version:** 3.6.6
 
 ## Features
 
@@ -15,11 +15,12 @@ Tampermonkey userscript for shahvani.com — performance-focused tap-to-load med
 | **4-layer metadata detection** | IndexedDB cache → Page metadata → Range probe → Video element `loadedmetadata` |
 | **Optional size/duration probe** | `off` (default, zero network) / `cache` (local only) / `auto` (IntersectionObserver + capped Range) |
 | **Performance profiles** | Compatible / Balanced / Ultra — escalating optimizations |
-| **Tabbed control panel** | Overview, Video, Frames, Ads, Page, Look, Data, Download (8 tabs) |
+| **Tabbed control panel** | Overview, Video, Frames, Page, Look, Data, Download (7 tabs) |
 | **Theme Color system** | 8 presets (Teal, Midnight, Forest, Sunset, Monochrome, Ocean, Coral, Rose) — accent + optional surface tint |
 | **Download tab** | Live size/duration/thumbnail per row, persistent cache (30 days), selection totals (duration + size), select/copy/download, works while script Off |
 | **Unlock & Load All / Release** | Unlock only (no play), 30s gesture guard; Release stops all unlocked videos (playing or paused), cancels Unlock |
-| **Ad host filtering** | Known ad domains (doubleclick, googlesyndication, taboola, etc.) |
+| **Saved videos list** | Bookmark icon per row, persistent across reloads, open in new tab, bulk actions (Alt+Shift+B/S) |
+| **Live thumbnails for opened videos** | Android-friendly preview (cors/blob/plain stages) auto-caches as real thumbnail |
 | **Video resume** | Position saved to IndexedDB on pause/pagehide, restored on next visit |
 | **Manual resource release** | One-click release of paused videos + off-screen iframes |
 | **Emergency mode** | Instantly pause all HTML videos, block deferred activation |
@@ -46,7 +47,6 @@ Settings persist in `localStorage` (`shvUltraLite.settings.v3`) and IndexedDB (`
 ```javascript
 {
   profile: 'balanced',           // 'compatible' | 'balanced' | 'ultra'
-  hideKnownAds: true,            // filter known ad iframes
   theme: 'system',               // 'system' | 'dark' | 'light'
   themeColor: 'default',         // 'default' | 'midnight' | 'forest' | 'sunset' | 'monochrome' | 'ocean' | 'coral' | 'rose'
   compact: false,                // compact panel mode
@@ -57,7 +57,8 @@ Settings persist in `localStorage` (`shvUltraLite.settings.v3`) and IndexedDB (`
   lang: 'fa',                    // 'en' | 'fa'
   lazyImages: true,              // lazy-load off-screen images
   showPlaceholders: true,        // show placeholders instead of hiding
-  blockScripts: true             // block ad scripts via beforescriptexecute (FF)
+  shortcuts: true,               // keyboard shortcuts (Alt+Shift+key)
+  blockPopups: true              // block popups (window.open/alert/confirm/prompt)
 }
 ```
 
@@ -81,7 +82,6 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 - **Unlock & Load All / Release** — Unlock only (no play), 8s gesture guard; Release stops all unlocked videos (playing or paused), cancels Unlock
 
 ### Media Tab
-- **Ad filter toggle** — known ad host filtering
 - **Load visible players** — activate placeholders currently on-screen
 - **Load all pending** — activate all deferred media (with confirmation)
 - **Pause all videos** — immediate pause of all HTML5 videos
@@ -109,20 +109,16 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 - **Persistent cache** — size, duration, poster, and small JPEG thumbnail cached per video (30 days)
 - **Selection totals** — summed duration and size of selected videos shown next to counter (`Total: 4:45 · 4.5 MB`); incomplete items marked live
 - **Selection** — checkboxes, Select all / Deselect all, counter updates live
-- **Download Selected** — sends to Firefox download manager (shahvani.com) or Tampermonkey GM_download (up.shahvani.com) (500ms gap, >10 needs second tap); up.shahvani.com: GM_download → blob fallback → copy+tab
+- **Download Selected** — sends to Firefox download manager (shahvani.com) or Tampermonkey blob (up.shahvani.com) (500ms gap, >10 needs second tap); up.shahvani.com: blob → copy+tab; large files: GM_download as last resort
 - **Failure visible** — if a download cannot start, red persistent message with manager error code (e.g., `not_succeeded`, `not_whitelisted`, `HTTP 403`)
 - **Copy Selected Links** — one per line, fallback to manual copy box
 - **Per-row actions** — Download / Copy icons with tooltips
+- **Saved videos** — bookmark icon per row, opens saved list (Alt+Shift+B), bulk download/copy/unsave (Alt+Shift+S)
 - **Works while script is Off** — reads from DOM, no lock engine needed
 - **Auto size/duration lookup** — for every row, automatic HEAD → tiny Range → browser metadata (no button needed); cache-first on reload
+- **Live thumbnails for opened videos** — Android-friendly preview (cors→blob→plain stages, max 2 active/40 kept) auto-caches as real thumbnail
 
-### Network Tab
-- **Blocked requests log** — recent blocked resource requests
-- **Filter by domain** — search blocked list
-- **Clear log** — reset blocked requests
-
-### Privacy Tab
-- **Script blocking** — toggle `beforescriptexecute` ad script blocking
+### Frames Tab
 - **Popup blocking** — toggle window.open/alert/confirm/prompt blocking
 - **Resource cleaning** — toggle detached node cleanup
 
@@ -150,6 +146,7 @@ Access via panel (FAB button ⚡ bottom-right) or edit directly in DevTools cons
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| **3.6.6** | 2026-11-27 | Stability release: fixed playback seek bugs, saved videos sync across tabs, background activity stopped when panel closed, live preview reliability (cors→blob→plain, max 40, auto-releases), Unlock & Load All uses `preload=metadata` (no auto buffer), removed Ads tab & download method setting, removed seek-decode & Make Thumbnails button, purged black thumbnails, 45 dead translations removed, zero lint errors |
 | **3.6.5** | 2026-11-25 | Fixed auto-download & data waste (removed elementDuration probe, no auto thumbnails, thumbnails only after user opens video), fixed Android black/delayed thumbnails (luminance check, sync decode, seek-to-decode), fixed Android missing thumbnails (tainted frames cached, frame rebuild enabled, mozPaintedFrames wait), **live preview for opened videos on Android** (max 2, on-screen only, auto-caches as real thumbnail), removed autoThumbs setting, diagnostics for thumbs |
 | **3.6.4** | 2026-11-24 | Saved videos list (bookmark icon, Alt+Shift+B/S), sturdier thumbnails on Android (auto capture, crossOrigin fallback), fixed Android Firefox downloads (auto-detect Tampermonkey support, 20s timeout, fallback chain), download method setting (auto/browser/Tampermonkey), IndexedDB v4 with savedThumbs store, diagnostics for thumbs/downloads |
 | **3.6.3** | 2026-11-24 | 11 keyboard shortcuts (Alt+Shift+keys), persistent cross-origin thumbnails (IndexedDB), per-page selection scope, direct download queue (no confirmation), parallel GM_download (Android 2/ Desktop 3), retry failed, circuit breaker, up.shahvani.com probe 24s total, @connect * for redirects |

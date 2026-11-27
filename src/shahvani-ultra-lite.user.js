@@ -1,12 +1,10 @@
 // ==UserScript==
 // @name         Shahvani Ultra Lite
 // @namespace    local.shahvani.ultralite
-// @version      3.6.5
-// @description  Shahvani Ultra Lite 3.6.5 (live thumbnails without canvas for Firefox for Android, saved videos list, keyboard shortcuts): tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, Firefox / Tampermonkey download, shahvani.com + up.shahvani.com), video resume, video metadata cache, optional light size/duration probe (off by default). Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
+// @version      3.6.6
+// @description  Shahvani Ultra Lite 3.6.6: tap-to-load media, bilingual EN/FA, IndexedDB storage, theme colors, Download tab (select, copy links, browser download, shahvani.com + up.shahvani.com), saved videos list, thumbnails (cached, live preview for opened videos), keyboard shortcuts, video resume, video metadata cache, optional light size/duration probe. Locked videos download nothing unless the probe is set to Auto (then only the first few KB of a card in view).
 // @author       parham
 // @homepageURL  https://github.com/parhamghahremani
-// @updateURL    https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/src/shahvani-ultra-lite.user.js
-// @downloadURL  https://raw.githubusercontent.com/parhamghahremani/shahvani-ultra-lite/main/src/shahvani-ultra-lite.user.js
 // @match        *://shahvani.com/*
 // @match        *://*.shahvani.com/*
 // @run-at       document-start
@@ -22,7 +20,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '3.6.5';
+  const VERSION = '3.6.6';
 
   // v3.6.1: a video / audio / image opened on its own (e.g. a direct up.shahvani.com link in a tab) is the browser's own
   // viewer, not a page: nothing to lock, nothing to patch.
@@ -36,9 +34,6 @@
   const VISUAL_BATCH_MS = 160;
   const UI_UPDATE_MS = 120;
   const AUTO_RELEASE_INTERVAL_MS = 15000;
-  const MAX_BLOCKED_LOG_ENTRIES = 500;
-  const MAX_CUSTOM_AD_HOSTS = 200;
-  const MAX_ID_LENGTH = 200;
   const PLACEHOLDER_MIN_HEIGHT = 140;
   const PLACEHOLDER_MAX_HEIGHT = 320;
   // v3.6.1: every video lock card has exactly this size, whatever the real video measures: 733.97 x 412.85 -> 734 x 413 (16:9)
@@ -49,7 +44,6 @@
   const ASPECT_RATIO_DEFAULT = 16 / 9;
   const GESTURE_WINDOW_MS = 5000;
   const TOAST_DURATION_MS = 2200;
-  const MAX_SAFE_INT = 2147483647;
   // v3.5.4: size/duration probe (only used when videoProbe === 'auto')
   const PROBE_HEAD_BYTES = 16384;       // request 1: ftyp + moov header + mvhd fit easily
   const PROBE_TAIL_BYTES = 8192;        // request 2: starts exactly at the moov box (when it is behind mdat)
@@ -108,14 +102,7 @@
     lockFrames: true,
     lockSameSite: true,
 
-    hideKnownAds: true,
-    hideAdsFully: false,
-    blockAdScripts: true,
-    blockAdRequests: true,
-    blockTrackers: false,
-    cosmeticAds: true,
     blockPopups: true,
-    customAdHosts: [],
 
     lazyImages: true,
     asyncDecode: true,
@@ -148,8 +135,6 @@
     shortcuts: true,
 
     // v3.6.4
-    livePreview: true,    // v3.6.5: Download tab: a video you OPENED but that has no thumbnail is shown by the browser itself (Android: canvas cannot read its frames)
-    dlMethod: 'auto'      // auto | link (browser link / blob, no Tampermonkey downloader) | gm (Tampermonkey downloader first)
   });
 
   const ENUMS = {
@@ -158,8 +143,7 @@
     scale: ['s', 'm', 'l'],
     side: ['left', 'right'],
     autoReleaseMin: [1, 3, 5, 10, 30],
-    videoProbe: ['off', 'cache', 'auto'],
-    dlMethod: ['auto', 'link', 'gm']
+    videoProbe: ['off', 'cache', 'auto']
   };
 
   // v3.6.0: Theme Color = accent + optional surface tint (dark / light). null tint = stock colors.
@@ -196,29 +180,15 @@
     return best;
   }
 
-  const KNOWN_AD_HOSTS = [
-    'doubleclick.net', 'googlesyndication.com', 'googleadservices.com', 'adnxs.com',
-    'taboola.com', 'outbrain.com', 'popads.net', 'propellerads.com', 'exoclick.com',
-    'juicyads.com', 'trafficjunky.net',
-    'exosrv.com', 'magsrv.com', 'realsrv.com', 'tsyndicate.com', 'adsterra.com',
-    'clickadu.com', 'hilltopads.net', 'adcash.com', 'mgid.com', 'revcontent.com',
-    'popcash.net', 'ad-maven.com', 'bongacams.com', 'bongacams4.com', 'coosync.com',
-    'coverdistilltile.com'
-  ];
-
-  const TRACKER_HOSTS = [
-    'googletagmanager.com', 'google-analytics.com', 'static.cloudflareinsights.com'
-  ];
-
   /**
    * Sanitize and validate settings input against DEFAULTS.
-   * Handles special validation for customAdHosts, accent, y, idle, and enum keys.
+   * Handles special validation for fabY, idle and enum keys.
    * @param {Object} input - Raw settings object to sanitize
    * @param {Object} base - Base settings object (typically DEFAULTS)
    * @returns {Object} Sanitized settings object
    */
   function sanitize(input, base) {
-    const out = { ...base, customAdHosts: [] };
+    const out = { ...base };
     if (!input || typeof input !== 'object') return out;
 
     for (const key of Object.keys(DEFAULTS)) {
@@ -226,15 +196,7 @@
       const def = DEFAULTS[key];
       const val = input[key];
 
-      if (key === 'customAdHosts') {
-        if (Array.isArray(val)) {
-          out[key] = Array.from(new Set(val
-            .filter(x => typeof x === 'string')
-            .map(x => x.trim().toLowerCase())
-            .filter(x => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(x))))
-            .slice(0, MAX_CUSTOM_AD_HOSTS);
-        }
-      } else if (key === 'fabY') {
+      if (key === 'fabY') {
         if (typeof val === 'number' && val >= 0 && val <= 1) out[key] = val;
       } else if (key === 'idle') {
         if (typeof val === 'number' && val >= 0.3 && val <= 1) out[key] = val;
@@ -254,7 +216,7 @@
   let settingsFromLocalStorage = false;
 
   function loadSettings() {
-    const base = { ...DEFAULTS, customAdHosts: [] };
+    const base = { ...DEFAULTS };
 
     // Settings are read synchronously from localStorage so the lock can start at document-start.
     // IndexedDB only keeps a backup copy and is consulted later (see start()).
@@ -331,11 +293,6 @@
             const store = db.createObjectStore('resumePositions', { keyPath: 'id' });
             store.createIndex('url', 'url', { unique: false });
             store.createIndex('timestamp', 'timestamp', { unique: false });
-          }
-          if (!db.objectStoreNames.contains('blockedRequests')) {
-            const store = db.createObjectStore('blockedRequests', { keyPath: 'id', autoIncrement: true });
-            store.createIndex('timestamp', 'timestamp', { unique: false });
-            store.createIndex('domain', 'domain', { unique: false });
           }
           // v3.5.1: Video metadata cache store (Layer 0)
           if (!db.objectStoreNames.contains('videoMetadata')) {
@@ -445,45 +402,6 @@
   }
 
   /**
-   * Log a blocked request to IndexedDB for later review.
-   * @param {string} url - Blocked request URL
-   * * @param {string} type - Request type (script, request, popup, etc.)
-   * @param {string} domain - Domain of the blocked request
-   * @returns {Promise<void>} Resolves when logged
-   */
-  function idbLogBlockedRequest(url, type, domain) {
-    // v3.5.1: logBlockedRequests setting removed, backend functions retained for potential future use
-    // Currently disabled - returns without logging
-    return;
-  }
-
-  /**
-   * Get blocked requests from IndexedDB, newest first.
-   * @param {number} [limit=100] - Maximum number of entries to return
-   * @returns {Promise<Array>} Resolves with array of blocked request entries
-   */
-  function idbGetBlockedRequests(limit = 100) {
-    return idbInit().then(db => {
-      return new Promise(resolve => {
-        const tx = db.transaction('blockedRequests', 'readonly');
-        const store = tx.objectStore('blockedRequests');
-        const index = store.index('timestamp');
-        const req = index.openCursor(null, 'prev');
-        const results = [];
-        req.onsuccess = () => {
-          if (req.result && results.length < limit) {
-            results.push(req.result.value);
-            req.result.continue();
-          } else {
-            resolve(results);
-          }
-        };
-        req.onerror = () => resolve([]);
-      });
-    }).catch(() => Promise.resolve([]));
-  }
-
-  /**
    * v3.5.1: Check video metadata cache in IndexedDB (Layer 0).
    * @param {Object} entry - Video entry
    * @returns {Promise<Object|null>} Cached metadata or null
@@ -584,6 +502,65 @@
   }
   const lsThumbs = makeLsRing('shvUltraLite.thumbs.v1', 60, 24000);
   const lsSavedThumbs = makeLsRing('shvUltraLite.savedth.v1', 80, 24000);
+
+  /**
+   * v3.6.6: pictures stored by older versions may be BLANK (black frames of Firefox for Android were saved as black JPEGs and then
+   * shown, and kept, for 30 days). Each stored picture is looked at once; a blank one is deleted and is made again the next time its
+   * video is opened. A picture that has been looked at (or was made by this version, which refuses blank frames) is remembered.
+   */
+  const THUMB_CHECKED_KEY = 'shvUltraLite.thumbsChecked.v1';
+  const thumbChecked = (() => {
+    try { const a = JSON.parse(localStorage.getItem(THUMB_CHECKED_KEY) || '[]'); if (Array.isArray(a)) return new Set(a.slice(-1500)); } catch (_) {}
+    return new Set();
+  })();
+  let thumbCheckedTimer = 0;
+  function markThumbChecked(key) {
+    if (thumbChecked.has(key)) return;
+    thumbChecked.add(key);
+    window.clearTimeout(thumbCheckedTimer);
+    thumbCheckedTimer = window.setTimeout(() => {
+      try { localStorage.setItem(THUMB_CHECKED_KEY, JSON.stringify(Array.from(thumbChecked).slice(-1500))); } catch (_) {}
+    }, 800);
+  }
+
+  function thumbLooksBlank(url) {
+    return new Promise(resolve => {
+      const img = new Image();
+      const timer = window.setTimeout(() => resolve(false), 4000);
+      img.onload = () => {
+        window.clearTimeout(timer);
+        try {
+          const c = document.createElement('canvas');
+          c.width = 24; c.height = 24;
+          c.getContext('2d').drawImage(img, 0, 0, 24, 24);
+          resolve(canvasState(c) === 'blank');
+        } catch (_) { resolve(false); }
+      };
+      img.onerror = () => { window.clearTimeout(timer); resolve(true); };       // a picture that does not even decode is useless
+      img.src = url;
+    });
+  }
+
+  /** @returns {Promise<Map>} the given thumbnails without the blank ones (those are deleted through `remove`). */
+  async function verifyStoredThumbs(map, remove) {
+    if (!map.size || thumbsBlocked()) return map;     // when pixels cannot be read, nothing can be judged: keep everything
+    const out = new Map();
+    for (const [key, th] of map) {
+      if (th.remote || !/^data:image\//.test(th.url) || thumbChecked.has(key)) { out.set(key, th); continue; }
+      if (await thumbLooksBlank(th.url)) { remove(key); thumbStats.purged++; continue; }
+      markThumbChecked(key);
+      out.set(key, th);
+    }
+    return out;
+  }
+
+  function idbDeleteThumb(key) {
+    lsThumbs.del(key);
+    idbInit().then(db => {
+      if (!db.objectStoreNames.contains('thumbnails')) return;
+      db.transaction('thumbnails', 'readwrite').objectStore('thumbnails').delete(key);
+    }).catch(() => {});
+  }
 
   /**
    * Keeps a stored poster thumbnail: a later frame-based one never replaces it. `remote` = the url is the poster's own
@@ -695,24 +672,16 @@
       tabHome: 'Overview',
       tabVideo: 'Video',
       tabFrames: 'Frames',
-      tabAds: 'Ads',
       tabPage: 'Page',
       tabLook: 'Look',
       tabData: 'Data',
 
       // Overview sections
-      secProfiles: 'Performance Profile',
-      profileCompatible: 'Compatible',
-      profileBalanced: 'Balanced',
-      profileUltra: 'Ultra',
-      profileDesc: 'Compatible: minimal changes. Balanced: lazy images + reduced effects. Ultra: content-visibility + repeated card optimization. Tap-to-load for iframes always active.',
       secStats: 'Page Status',
       statPendingVideos: 'Locked Videos',
       statPendingFrames: 'Locked Frames',
       statActiveVideos: 'Active Videos',
       statActiveFrames: 'Active Frames',
-      emergencyOff: 'Emergency: Off',
-      emergencyOn: 'Emergency: On',
       emergencyDesc: 'In emergency mode, HTML videos pause and deferred player activation is blocked until disabled.',
 
       // Media sections
@@ -750,27 +719,9 @@
       lockSameSite: 'Also lock same-site frames',
       lockSameSiteD: 'Turn off to keep frames from shahvani.com (chat, login) running normally.',
 
-      // Ads
-      secAdFrames: 'Ad Frames',
-      hideKnownAds: 'Filter known ad frames',
-      hideKnownAdsD: 'Frames from known ad networks cannot be loaded.',
-      hideAdsFully: 'Hide filtered ads completely',
-      hideAdsFullyD: 'No placeholder is shown for filtered ad frames.',
-      secAdNet: 'Ad Network Traffic',
-      blockAdScripts: 'Block ad scripts',
-      blockAdScriptsD: 'Stops scripts from known ad networks before they run.',
-      blockAdRequests: 'Block ad requests',
-      blockAdRequestsD: 'Refuses fetch, XHR and beacon calls to known ad networks.',
-      blockTrackers: 'Block analytics trackers',
-      blockTrackersD: 'Also blocks Google Tag Manager, Google Analytics and the Cloudflare beacon.',
       secShield: 'Shield',
-      cosmeticAds: 'Hide ad containers',
-      cosmeticAdsD: 'Hides common ad slots with CSS.',
       blockPopups: 'Block popups without a tap',
       blockPopupsD: 'window.open is refused unless you just touched the page.',
-      secCustom: 'Extra ad domains',
-      customHostsHint: 'One domain per line',
-      apply: 'Apply',
 
       // Page
       secImages: 'Images',
@@ -820,8 +771,6 @@
       aboutText: 'Runs on the proven v3 media engine: delayed or instant scan, blob and stream videos left alone, tap to unlock and play, gesture-based playback guard.',
 
       // v3.3.0 additions
-      showFabStats: 'FAB stats tooltip',
-      showFabStatsD: 'Show detailed stats on FAB hover/long-press.',
 
       // Placeholders
       phEmergency: 'Emergency lock is on. Turn it off to unlock.',
@@ -830,7 +779,6 @@
       phAudio: 'Tap to load the audio.',
       phFrame: 'Tap to load the player or embedded frame.',
       phFrameTitle: 'Tap to load this frame ({t}).',
-      phAd: 'Known ad frame filtered. Turn the ad filter off to load it.',
 
       // Status messages
       stReady: 'Ultra Lite is active.',
@@ -842,7 +790,6 @@
       stEmergencyOn: 'Emergency lock on. Unlocking is blocked.',
       stEmergencyOff: 'Emergency lock off. Tap to unlock players.',
       stEmergencyBlocked: 'Emergency lock is on. Turn it off first.',
-      stAdBlocked: 'This frame is a filtered known ad. Turn the ad filter off in Ads.',
       stPaused: 'Paused {n} item(s). Players inside external frames cannot be controlled.',
       stNoRelease: 'Nothing to release. Locked videos and visible frames stay as they are.',
       stReleased: 'Released. Videos: {v}, frames: {f}.',
@@ -864,15 +811,12 @@
       stReset: 'Settings reset.',
       stImported: 'Settings imported.',
       stBadJson: 'Invalid settings JSON.',
-      stHosts: 'Ad domains saved: {n}.',
       stPopup: 'Popup blocked.',
 
       // v3.4.1 additions - missing English keys for Overview tab
       // v3.5.3: keys that were referenced by the UI but missing (raw key names were shown)
       emergency: 'Emergency lock',
       reload: 'Reload page',
-      blockedScripts: 'Blocked scripts',
-      blockedRequests: 'Blocked requests',
       popupsBlocked: 'Blocked popups',
       resources: 'Loaded resources',
       cleaned: 'Cleaned entries',
@@ -891,18 +835,16 @@
       dlSelectedCount: 'Selected: {n} of {m}',
       dlTotals: 'Total: {dur} · {size}',
       dlTotalsUnknown: ' (+{u} incomplete)',
-      stDlGmStart: 'Downloading {i} of {n} through Tampermonkey: {name}',
+      stDlGmStart: 'Large file {i} of {n}: Tampermonkey downloader: {name}',
       stDlGmRunning: 'Tampermonkey is still downloading {name} (no progress reports).',
-      stDlGmDone: 'Download finished / started: {name}',
-      stDlBlob: 'Tampermonkey downloader failed, trying the fallback: {name}',
+      stDlBlob: 'Fetching {name} through Tampermonkey, the browser saves it...',
       stDlSentFailed: 'Started {n}{v}; {f} failed (reason in red, links copied; use Retry failed). Skipped: {m}.',
       dlSelectAll: 'Select all',
       dlDeselectAll: 'Deselect all',
       dlDownload: 'Download Selected ({n})',
       dlCopy: 'Copy Selected Links ({n})',
-      dlConfirm: 'Send {n} downloads? Tap again',
       dlEmpty: 'No videos found on this page.',
-      dlNote: 'Nothing is downloaded by itself: thumbnails exist only for videos you opened (they are then cached), and size / duration come from a few KB of the file header. Downloads go straight into the queue - no confirmation, one video or many. Several run at once; a failed one is listed in red with its reason and can be retried. Download method: Auto picks what works on your device (Android: the Tampermonkey downloader is tried first and dropped for the session if it does not start a file), Browser = plain links / memory, Tampermonkey = its downloader first. up.shahvani.com always needs Tampermonkey (allow its permission prompt once: Always allow all domains). Only videos of THIS page are listed - use the bookmark icon to keep one for later.',
+      dlNote: 'Nothing is downloaded by itself: thumbnails exist only for videos you opened (they are then cached for good), and size / duration come from a few KB of the file header. Downloads go straight into the queue - this script asks for no confirmation, one video or many; the browser saves every file (Firefox for Android asks once per file: that prompt belongs to Firefox). Files of up.shahvani.com are fetched through Tampermonkey as a blob (allow its permission prompt once: Always allow all domains); files too big for memory use the Tampermonkey downloader. Several run at once; a failed one is listed in red with its reason and can be retried. Only videos of THIS page are listed - use the bookmark icon to keep one for later.',
       dlOffPage: 'Not on this page',
       dlStream: 'Stream playlist: no direct file',
       dlNoLink: 'No usable link',
@@ -912,7 +854,6 @@
       dlTipDownload: 'Download this video',
       dlTipCopy: 'Copy this video link',
       stDlNone: 'Nothing selected.',
-      stDlSending: 'Sending downloads: {i} of {n}',
       stDlSent: 'Started {n} download(s){v}. Skipped: {m}.',
       stDlUnavailable: 'None of these can be downloaded here ({m}). Use Copy link.',
       stDlBusy: 'Downloads are still being sent.',
@@ -922,14 +863,14 @@
       stCopyManual: 'Clipboard blocked. The links are shown below: copy them manually.',
       loadAllBtn: 'Unlock & Load All Videos',
       loadAllConfirm: 'Load {n} video(s)? Tap again',
-      loadAllConfirmMany: 'Load {n} videos? Heavy on data and memory. Tap again',
+      loadAllConfirmMany: 'Load {n} videos? Each one loads only its header and first frame. Tap again',
       stNoLocked: 'No locked videos to load.',
       stLoadAllStart: 'Loading {n} video(s)...',
       stLoadAllDone: 'Unlocked and started loading {n} video(s).',
       dlChipDuration: 'Duration',
       dlChipSize: 'File size',
       stLoadAllBusy: 'Unlock & Load is still running.',
-      filteredAds: 'Filtered Ads',
+      stLoadAllStopped: 'Playback started: the rest of Unlock & Load was stopped so the video gets the whole connection.',
       // v3.6.3
       dlRetry: 'Retry failed ({n})',
       dlNoteTitle: 'How downloads work',
@@ -968,21 +909,12 @@
       stUnsaved: '{n} video(s) removed from the saved list.',
       stSavedFull: 'The saved list is full ({n}).',
       stSvNone: 'Tick some saved videos first.',
-      dlMethod: 'Download method',
-      dlMethodAuto: 'Auto',
-      dlMethodLink: 'Browser',
-      dlMethodGm: 'Tampermonkey',
       viaTm: 'Tampermonkey',
       viaLink: 'browser link',
       viaBlob: 'Tampermonkey memory',
       viaFetch: 'page',
       scSave: 'Save the selected videos',
       scSaved: 'Open / close the saved list',
-      dlMakeThumbs: 'Make thumbnails of opened videos',
-      livePreview: 'Show opened videos as a live preview',
-      livePreviewD: 'Only for videos you opened and that have no thumbnail yet (Android cannot read their frames). Never for videos you did not open; two at a time, rows on screen only.',
-      stThumbsMaking: 'Making thumbnails for {n} opened video(s)...',
-      stThumbsNone: 'No opened video without a thumbnail. Open a video first (tap it, or use Unlock & Load).'
     },
     fa: {
       brand: 'اولترا لایت',
@@ -994,24 +926,16 @@
       tabHome: 'نمای کلی',
       tabVideo: 'ویدیو',
       tabFrames: 'فریم‌ها',
-      tabAds: 'تبلیغات',
       tabPage: 'صفحه',
       tabLook: 'ظاهر',
       tabData: 'داده',
 
       // Overview
-      secProfiles: 'پروفایل عملکرد',
-      profileCompatible: 'سازگار',
-      profileBalanced: 'متعادل',
-      profileUltra: 'Ultra',
-      profileDesc: 'سازگار: تغییرات کمتر. متعادل: کاهش افکت‌ها و بارگیری تنبل تصاویر. Ultra: بهینه‌سازی کارت‌های تکراری. سیاست لمس برای همهٔ iframeها ثابت است.',
       secStats: 'وضعیت صفحه',
       statPendingVideos: 'ویدیوی قفل',
       statPendingFrames: 'فریم قفل',
       statActiveVideos: 'ویدیوی فعال',
       statActiveFrames: 'فریم فعال',
-      emergencyOff: 'حالت اضطراری: خاموش',
-      emergencyOn: 'حالت اضطراری: روشن',
       emergencyDesc: 'در حالت اضطراری، ویدئوهای HTML مکث می‌شوند و فعال‌کردن پلیرهای معوق تا زمان خاموش‌کردن این حالت متوقف می‌ماند.',
 
       // Media
@@ -1049,27 +973,9 @@
       lockSameSite: 'قفل فریم‌های همین سایت هم',
       lockSameSiteD: 'خاموش کنید تا فریم‌های shahvani.com (چت، ورود) عادی کار کنند.',
 
-      // Ads
-      secAdFrames: 'فریم‌های تبلیغاتی',
-      hideKnownAds: 'فیلتر فریم‌های تبلیغاتی شناخته‌شده',
-      hideKnownAdsD: 'فریم‌های شبکه‌های تبلیغاتی شناخته‌شده بارگذاری نمی‌شوند.',
-      hideAdsFully: 'پنهان‌کردن کامل تبلیغات فیلترشده',
-      hideAdsFullyD: 'برای فریم‌های تبلیغاتی فیلترشده هیچ کادری نشان داده نمی‌شود.',
-      secAdNet: 'ترافیک شبکه‌های تبلیغاتی',
-      blockAdScripts: 'مسدودسازی اسکریپت‌های تبلیغاتی',
-      blockAdScriptsD: 'اسکریپت‌های شبکه‌های تبلیغاتی شناخته‌شده پیش از اجرا متوقف می‌شوند.',
-      blockAdRequests: 'مسدودسازی درخواست‌های تبلیغاتی',
-      blockAdRequestsD: 'درخواست‌های fetch، XHR و beacon به شبکه‌های تبلیغاتی شناخته‌شده رد می‌شوند.',
-      blockTrackers: 'مسدودسازی ردیاب‌های آماری',
-      blockTrackersD: 'Google Tag Manager، Google Analytics و بیکن Cloudflare هم مسدود می‌شوند.',
       secShield: 'سپر',
-      cosmeticAds: 'پنهان‌کردن کادرهای تبلیغ',
-      cosmeticAdsD: 'جای تبلیغ‌های رایج با CSS پنهان می‌شود.',
       blockPopups: 'مسدودسازی پاپ‌آپ بدون لمس',
       blockPopupsD: 'تا وقتی تازه صفحه را لمس نکرده‌اید، window.open رد می‌شود.',
-      secCustom: 'دامنه‌های تبلیغاتی اضافه',
-      customHostsHint: 'هر خط یک دامنه',
-      apply: 'اعمال',
 
       // Page
       secImages: 'تصاویر',
@@ -1119,8 +1025,6 @@
       aboutText: 'بر پایهٔ موتور رسانهٔ اثبات‌شدهٔ نسخهٔ ۳: اسکن با تأخیر یا فوری، رها کردن ویدیوهای blob و استریم، بازکردن و پخش با لمس و نگهبان پخش بر اساس لمس.',
 
       // v3.3.0 additions
-      showFabStats: 'نمای tooltip آمار در دکمه',
-      showFabStatsD: 'نمایش آمار تفصیلی با هاور/فشار طولانی روی دکمه.',
 
       // Placeholders
       phEmergency: 'قفل اضطراری روشن است. برای بازکردن، ابتدا خاموشش کنید.',
@@ -1129,7 +1033,6 @@
       phAudio: 'برای بارگذاری صدا لمس کنید.',
       phFrame: 'برای بارگذاری پلیر یا فریم جاسازی‌شده لمس کنید.',
       phFrameTitle: 'برای بارگذاری این فریم ({t}) لمس کنید.',
-      phAd: 'فریم تبلیغاتی شناخته‌شده فیلتر شده. برای بارگذاری، فیلتر را خاموش کنید.',
 
       // Status messages
       stReady: 'اولترا لایت فعال است.',
@@ -1141,7 +1044,6 @@
       stEmergencyOn: 'قفل اضطراری روشن شد. بازکردن مسدود است.',
       stEmergencyOff: 'قفل اضطراری خاموش شد. پلیرها با لمس باز می‌شوند.',
       stEmergencyBlocked: 'قفل اضطراری روشن است. ابتدا خاموشش کنید.',
-      stAdBlocked: 'این فریم یک تبلیغ شناخته‌شده و فیلتر شده است. فیلتر را در بخش تبلیغات خاموش کنید.',
       stPaused: '{n} مورد مکث شد. پلیرهای داخل فریم‌های خارجی قابل کنترل نیستند.',
       stNoRelease: 'موردی برای آزادسازی نیست. ویدیوهای قفل و فریم‌های قابل‌مشاهده بدون تغییر می‌مانند.',
       stReleased: 'آزادسازی شد. ویدیو: {v}، فریم: {f}.',
@@ -1149,7 +1051,6 @@
       stReset: 'تنظیمات بازنشانی شد.',
       stImported: 'تنظیمات وارد شد.',
       stBadJson: 'JSON تنظیمات نامعتبر است.',
-      stHosts: 'دامنه‌های تبلیغاتی ذخیره شد: {n}.',
       stPopup: 'پاپ‌آپ مسدود شد.',
 
       // v3.4.0 additions
@@ -1169,8 +1070,6 @@
       // v3.4.1 additions - missing Persian translations for Overview tab
       emergency: 'قفل اضطراری',
       reload: 'بارگذاری مجدد صفحه',
-      blockedScripts: 'اسکریپت‌های مسدودشده',
-      blockedRequests: 'درخواست‌های مسدودشده',
       popupsBlocked: 'پاپ‌آپ‌های مسدودشده',
       resources: 'منابع بارگذاری‌شده',
       cleaned: 'ورودی‌های پاک‌شده',
@@ -1189,18 +1088,16 @@
       dlSelectedCount: 'انتخاب‌شده: {n} از {m}',
       dlTotals: 'جمع: {dur} · {size}',
       dlTotalsUnknown: ' (+{u} ناقص)',
-      stDlGmStart: 'دانلود {i} از {n} با Tampermonkey: {name}',
+      stDlGmStart: 'فایل بزرگ {i} از {n}: دانلودر Tampermonkey: {name}',
       stDlGmRunning: 'Tampermonkey هنوز در حال دانلود {name} است (گزارش پیشرفت نمی‌دهد).',
-      stDlGmDone: 'دانلود تمام شد / شروع شد: {name}',
-      stDlBlob: 'دانلودر Tampermonkey ناموفق بود، روش جایگزین: {name}',
+      stDlBlob: 'در حال گرفتن {name} با Tampermonkey؛ مرورگر آن را ذخیره می‌کند...',
       stDlSentFailed: '{n} دانلود شروع شد{v}؛ {f} ناموفق بود (دلیل با رنگ قرمز، لینک‌ها کپی شد؛ «تلاش دوباره» را بزنید). ردشده: {m}.',
       dlSelectAll: 'انتخاب همه',
       dlDeselectAll: 'لغو انتخاب همه',
       dlDownload: 'دانلود انتخاب‌شده‌ها ({n})',
       dlCopy: 'کپی لینک انتخاب‌شده‌ها ({n})',
-      dlConfirm: 'ارسال {n} دانلود؟ دوباره لمس کنید',
       dlEmpty: 'ویدیویی در این صفحه پیدا نشد.',
-      dlNote: 'هیچ چیز خودکار دانلود نمی‌شود: تامبنیل فقط برای ویدیوهایی که باز کرده‌اید ساخته و کش می‌شود و حجم و مدت‌زمان از چند کیلوبایت ابتدای فایل خوانده می‌شود. دانلودها مستقیم و بدون تأیید وارد صف می‌شوند، چه یک ویدیو چه چندتا. چند دانلود هم‌زمان اجرا می‌شود و دانلود ناموفق با دلیلش قرمز نمایش داده می‌شود و قابل تلاش دوباره است. روش دانلود: «خودکار» آنچه روی دستگاه شما کار می‌کند را انتخاب می‌کند (اندروید: اول دانلودر Tampermonkey امتحان می‌شود و اگر فایلی شروع نکرد تا پایان نشست کنار گذاشته می‌شود)، «مرورگر» = لینک ساده / حافظه، «Tampermonkey» = اول دانلودر آن. ویدیوهای up.shahvani.com همیشه به Tampermonkey نیاز دارند (پنجره‌ی اجازه‌ی آن را یک‌بار تأیید کنید: Always allow all domains). فقط ویدیوهای همین صفحه فهرست می‌شوند - با آیکون نشانک یکی را برای بعد نگه دارید.',
+      dlNote: 'هیچ چیز خودکار دانلود نمی‌شود: تامبنیل فقط برای ویدیوهایی که باز کرده‌اید ساخته و برای همیشه کش می‌شود و حجم و مدت‌زمان از چند کیلوبایت ابتدای فایل خوانده می‌شود. دانلودها مستقیم وارد صف می‌شوند و این اسکریپت تأیید نمی‌خواهد، چه یک ویدیو چه چندتا؛ ذخیره‌ی هر فایل با مرورگر است (فایرفاکس اندروید برای هر فایل یک‌بار می‌پرسد: آن پرسش مال فایرفاکس است). فایل‌های up.shahvani.com از طریق Tampermonkey به‌صورت blob گرفته می‌شوند (پنجره‌ی اجازه‌ی آن را یک‌بار تأیید کنید: Always allow all domains)؛ فایل‌های بزرگ‌تر از حافظه با دانلودر Tampermonkey دانلود می‌شوند. چند دانلود هم‌زمان اجرا می‌شود و دانلود ناموفق با دلیلش قرمز نمایش داده می‌شود و قابل تلاش دوباره است. فقط ویدیوهای همین صفحه فهرست می‌شوند - با آیکون نشانک یکی را برای بعد نگه دارید.',
       dlOffPage: 'در این صفحه نیست',
       dlStream: 'پلی‌لیست استریم: فایل مستقیم ندارد',
       dlNoLink: 'لینک قابل‌استفاده ندارد',
@@ -1210,7 +1107,6 @@
       dlTipDownload: 'دانلود این ویدیو',
       dlTipCopy: 'کپی لینک این ویدیو',
       stDlNone: 'چیزی انتخاب نشده.',
-      stDlSending: 'در حال ارسال دانلودها: {i} از {n}',
       stDlSent: '{n} دانلود شروع شد{v}. ردشده: {m}.',
       stDlUnavailable: 'هیچ‌کدام اینجا قابل دانلود نیستند ({m}). از کپی لینک استفاده کنید.',
       stDlBusy: 'ارسال دانلودها هنوز ادامه دارد.',
@@ -1220,14 +1116,14 @@
       stCopyManual: 'کلیپ‌بورد مسدود است. لینک‌ها پایین نشان داده شده‌اند: دستی کپی کنید.',
       loadAllBtn: 'باز کردن و بارگذاری همه ویدیوها',
       loadAllConfirm: 'بارگذاری {n} ویدیو؟ دوباره لمس کنید',
-      loadAllConfirmMany: 'بارگذاری {n} ویدیو؟ مصرف داده و حافظه بالاست. دوباره لمس کنید',
+      loadAllConfirmMany: 'بارگذاری {n} ویدیو؟ هر ویدیو فقط سرآیند و اولین فریمش را می‌گیرد. دوباره بزنید',
       stNoLocked: 'ویدیوی قفلی برای بارگذاری نیست.',
       stLoadAllStart: 'در حال بارگذاری {n} ویدیو...',
       stLoadAllDone: '{n} ویدیو باز شد و بارگذاری آغاز شد.',
       dlChipDuration: 'مدت زمان',
       dlChipSize: 'حجم فایل',
       stLoadAllBusy: 'بارگذاری هنوز ادامه دارد.',
-      filteredAds: 'تبلیغات فیلترشده',
+      stLoadAllStopped: 'پخش شروع شد: بقیه‌ی «باز کردن و بارگذاری» متوقف شد تا ویدیو تمام اتصال را داشته باشد.',
       // v3.6.3
       dlRetry: 'تلاش دوباره برای ناموفق‌ها ({n})',
       dlNoteTitle: 'دانلود چگونه کار می‌کند',
@@ -1266,21 +1162,12 @@
       stUnsaved: '{n} ویدیو از ذخیره‌شده‌ها حذف شد.',
       stSavedFull: 'فهرست ذخیره‌شده‌ها پر است ({n}).',
       stSvNone: 'اول چند ویدیوی ذخیره‌شده را انتخاب کنید.',
-      dlMethod: 'روش دانلود',
-      dlMethodAuto: 'خودکار',
-      dlMethodLink: 'مرورگر',
-      dlMethodGm: 'Tampermonkey',
       viaTm: 'Tampermonkey',
       viaLink: 'لینک مرورگر',
       viaBlob: 'حافظه‌ی Tampermonkey',
       viaFetch: 'صفحه',
       scSave: 'ذخیره‌ی ویدیوهای انتخاب‌شده',
       scSaved: 'باز / بستن فهرست ذخیره‌شده‌ها',
-      dlMakeThumbs: 'ساخت تامبنیل ویدیوهای باز‌شده',
-      livePreview: 'نمایش ویدیوهای بازشده به‌صورت پیش‌نمایش زنده',
-      livePreviewD: 'فقط برای ویدیویی که باز کرده‌اید و هنوز تامبنیل ندارد (اندروید نمی‌تواند فریمش را بخواند). هرگز برای ویدیویی که باز نکرده‌اید؛ دوتا دوتا و فقط ردیف‌های روی صفحه.',
-      stThumbsMaking: 'در حال ساخت تامبنیل برای {n} ویدیوی باز‌شده...',
-      stThumbsNone: 'ویدیوی بازشده‌ی بدون تامبنیل نیست. اول یک ویدیو را باز کنید (روی آن بزنید یا «باز کردن و بارگذاری» را بزنید).'
     }
   };
 
@@ -1299,8 +1186,6 @@
     emergency: false,
     observer: null,
     cleanedEntries: 0,
-    blockedScripts: 0,
-    blockedRequests: 0,
     popupsBlocked: 0,
     mediaEntries: new Set(),
     pendingVisualRoots: new Set(),
@@ -1409,7 +1294,6 @@
    * ==================================================================== */
 
   function buildPageCss() {
-    const adSelectors = KNOWN_AD_HOSTS.map(h => 'html.shv-cosmetic-ads iframe[src*="' + h + '"]').join(',\n');
     return `
     html.shv-ultralite .shv-suspended-video,
     html.shv-ultralite .shv-suspended-frame { display: none !important; }
@@ -1432,16 +1316,6 @@
         contain-intrinsic-size: auto 380px !important;
       }
     }
-
-    html.shv-cosmetic-ads ins.adsbygoogle,
-    html.shv-cosmetic-ads .adsbygoogle,
-    html.shv-cosmetic-ads [id^="google_ads_"],
-    html.shv-cosmetic-ads [id*="div-gpt-ad"],
-    html.shv-cosmetic-ads [data-ad-slot],
-    html.shv-cosmetic-ads [data-ad-client],
-    ${adSelectors} { display: none !important; }
-
-    .shv-media-placeholder.shv-ad-hidden { display: none !important; }
 
     /* ===== Inverted Neumorphic Video Placeholder (v3.4.0) ===== */
     /* Base: flat, no shadows. Hover/Touch: raised neumorphic */
@@ -1656,8 +1530,7 @@
       style.id = 'shv-ultralite-dyn';
       document.documentElement.appendChild(style);
     }
-    const rules = settings.customAdHosts.map(h => 'html.shv-cosmetic-ads iframe[src*="' + h + '"]').join(',');
-    style.textContent = ':root{--shv-accent:' + effectiveAccent() + '}' + (rules ? rules + '{display:none!important}' : '');
+    style.textContent = ':root{--shv-accent:' + effectiveAccent() + '}';
   }
 
   /* ======================================================================
@@ -1686,35 +1559,6 @@
 
   function isBlobURL(raw) {
     return typeof raw === 'string' && /^blob:/i.test(raw.trim());
-  }
-
-  /**
-   * Check if a host matches any domain in a list (exact or subdomain).
-   * @param {string} host - Hostname to check
-   * @param {string[]} list - Array of domain patterns
-   * @returns {boolean} True if host matches any pattern
-   */
-  function hostMatches(host, list) {
-    return list.some(domain => host === domain || host.endsWith('.' + domain));
-  }
-
-  function adHosts() {
-    return KNOWN_AD_HOSTS.concat(settings.customAdHosts);
-  }
-
-  function isKnownAdURL(raw) {
-    if (!isUsableURL(raw)) return false;
-    const url = getURL(raw);
-    return !!url && hostMatches(url.hostname.toLowerCase(), adHosts());
-  }
-
-  function isBlockedNetworkURL(raw, includeTrackers) {
-    if (typeof raw !== 'string' || !raw) return false;
-    const url = getURL(raw);
-    if (!url || !/^https?:$/.test(url.protocol)) return false;
-    const host = url.hostname.toLowerCase();
-    if (hostMatches(host, adHosts())) return true;
-    return !!includeTrackers && hostMatches(host, TRACKER_HOSTS);
   }
 
   function isSameSiteURL(raw) {
@@ -1872,7 +1716,6 @@
       if (entry.released) return t('phReleased');
       return entry.audio ? t('phAudio') : t('phVideo');
     }
-    if (entry.isKnownAd && settings.hideKnownAds) return t('phAd');
     return entry.title ? t('phFrameTitle', { t: entry.title.slice(0, 60) }) : t('phFrame');
   }
 
@@ -1881,8 +1724,6 @@
     const label = button.querySelector('.shv-placeholder-label');
     if (label) label.textContent = placeholderText(entry);
     button.style.setProperty('direction', settings.lang === 'fa' ? 'rtl' : 'ltr', 'important');
-    button.classList.toggle('shv-ad-hidden',
-      entry.kind === 'frame' && entry.isKnownAd && settings.hideKnownAds && settings.hideAdsFully);
   }
 
   function refreshPlaceholder(entry) {
@@ -1971,12 +1812,6 @@
         return;
       }
       if (entry.loaded) return;
-
-      if (entry.kind === 'frame' && entry.isKnownAd && settings.hideKnownAds) {
-        setStatus('stAdBlocked', null, true);
-        refreshPlaceholder(entry);
-        return;
-      }
 
       if (entry.kind === 'video') activateVideo(entry, true);
       else activateFrame(entry);
@@ -2096,7 +1931,6 @@
       inView: false,
       holdUntil: 0,         // v3.6.1: after "Unlock & Load All" playback is held until the user touches the page
       unlockedAt: 0,
-      fullLoad: false,      // v3.6.0: set by "Unlock & Load All": restore with preload=auto
       ...videoGeometry(video)
     };
 
@@ -2532,44 +2366,11 @@
   }
 
   /**
-   * Duration straight from the browser's own demuxer: a detached <video preload="metadata"> reads only the header
-   * of the file and needs no CORS permission. Last resort when the Range probe cannot read (or understand) a video.
-   * @returns {Promise<number>} seconds, 0 if unknown (or stopped through the signal)
-   */
-  function elementDuration(url, signal) {      // NOT used by any automatic path (kept for tests only)
-    return new Promise(resolve => {
-      let video = null;
-      let done = false;
-      let timer = 0;
-      let detach = () => {};
-      const finish = value => {
-        if (done) return;
-        done = true;
-        window.clearTimeout(timer);
-        detach();
-        try { video.removeAttribute('src'); NATIVE.load.call(video); } catch (_) {}
-        resolve(Number.isFinite(value) && value > 0 && value < 1e6 ? value : 0);
-      };
-      try {
-        video = document.createElement('video');
-        unsafeVideos.add(video);   // v3.6.3: our own lock (preload -> 'none') must not apply to the probe element - this was why up.shahvani.com never gave a duration
-        video.preload = 'metadata';
-        video.muted = true;
-        video.addEventListener('loadedmetadata', () => finish(video.duration), { once: true });
-        video.addEventListener('error', () => finish(0), { once: true });
-        timer = window.setTimeout(() => finish(video.duration), 12000);
-        detach = gmAbortable(signal, () => {}, () => finish(0));
-        if (!done) video.src = url;
-      } catch (_) { finish(0); }
-    });
-  }
-
-  /**
    * Size + duration of one video URL. Chain (each step only when the one before did not answer):
    *   1. HEAD (no body)         -> size, and whether Range is supported
    *   2. tiny Range request     -> duration from the container header (and size if HEAD was blocked); another
    *                                origin through the manager ONLY after HEAD confirmed "Accept-Ranges: bytes"
-   *   (v3.6.5: the detached <video> step was removed - it could download the whole file)
+   *   (a detached <video> step used to follow: it could make the browser read the whole file, so it is gone)
    * Never throws for "nobody could tell": the result is then { size: 0, duration: 0 }. A stop (script Off) throws AbortError.
    */
   async function probeVideo(url) {
@@ -2920,8 +2721,7 @@
     }
 
     video.removeAttribute('autoplay');
-    video.preload = entry.fullLoad ? 'auto' : 'metadata';
-    entry.fullLoad = false;
+    video.preload = 'metadata';       // header + first frame, then the browser suspends the download until the video is played
     // Setting src starts the load by itself; restored <source> attributes do not, so load() is needed.
     if (!restoredDirect && restoredSources) {
       try { NATIVE.load.call(video); } catch (_) {}
@@ -3079,7 +2879,6 @@
   }
 
   function frameNeedsLock(src) {
-    if (settings.hideKnownAds && isKnownAdURL(src)) return true;
     if (!settings.lockFrames) return false;
     if (!settings.lockSameSite && isSameSiteURL(src)) return false;
     return true;
@@ -3104,7 +2903,6 @@
       srcdocPresent: descriptor.srcdocPresent,
       sourceAttr: descriptor.sourceAttr,
       title: (frame.getAttribute('title') || '').trim(),
-      isKnownAd: isKnownAdURL(descriptor.src),
       originalLoading: frame.getAttribute('loading'),
       ...frameGeometry(frame)
     };
@@ -3127,11 +2925,6 @@
 
     if (state.emergency && !force) {
       setStatus('stEmergencyBlocked', null, true);
-      return;
-    }
-
-    if (entry.isKnownAd && settings.hideKnownAds && !force) {
-      setStatus('stAdBlocked', null, true);
       return;
     }
 
@@ -3327,7 +3120,7 @@
 
   function teardown() {
     const root = document.documentElement;
-    if (root) root.classList.remove('shv-ultralite', 'shv-lite-effects', 'shv-ultra-mode', 'shv-cosmetic-ads', 'shv-flat');
+    if (root) root.classList.remove('shv-ultralite', 'shv-lite-effects', 'shv-ultra-mode', 'shv-flat');
 
     for (const entry of Array.from(state.mediaEntries)) {
       if (entry.element && !entry.loaded) {
@@ -3360,7 +3153,6 @@
     root.classList.add('shv-ultralite');
     root.classList.toggle('shv-lite-effects', settings.calmMotion);
     root.classList.toggle('shv-ultra-mode', settings.smartCards);
-    root.classList.toggle('shv-cosmetic-ads', settings.cosmeticAds);
     root.classList.toggle('shv-flat', settings.flatEffects);
 
     for (const entry of Array.from(state.mediaEntries)) {
@@ -3369,12 +3161,7 @@
       if (entry.kind === 'video') {
         if (!lockEnabledFor(entry.element) && !entry.loaded) activateVideo(entry, false, true);
       } else {
-        entry.isKnownAd = isKnownAdURL(entry.src);
-        if (entry.loaded) {
-          if (entry.isKnownAd && settings.hideKnownAds) deferLoadedFrame(entry);
-        } else if (!frameNeedsLock(entry.src)) {
-          activateFrame(entry, true);
-        }
+        if (!entry.loaded && !frameNeedsLock(entry.src)) activateFrame(entry, true);
       }
     }
 
@@ -3693,7 +3480,7 @@
   }
 
   function collectStats() {
-    let pendingVideos = 0, activeVideos = 0, pendingFrames = 0, activeFrames = 0, filteredAds = 0, detachedEntries = 0;
+    let pendingVideos = 0, activeVideos = 0, pendingFrames = 0, activeFrames = 0, detachedEntries = 0;
 
     for (const entry of state.mediaEntries) {
       if (!entry.element || !entry.element.isConnected) { detachedEntries++; continue; }
@@ -3704,12 +3491,11 @@
         activeFrames++;
       } else {
         pendingFrames++;
-        if (entry.isKnownAd && settings.hideKnownAds) filteredAds++;
       }
     }
 
     return {
-      pendingVideos, activeVideos, pendingFrames, activeFrames, filteredAds, detachedEntries,
+      pendingVideos, activeVideos, pendingFrames, activeFrames, detachedEntries,
       cleanedEntries: state.cleanedEntries,
       resources: resourceCount()
     };
@@ -3720,9 +3506,9 @@
       version: VERSION,
       url: location.origin + location.pathname,
       userAgent: navigator.userAgent,
-      stats: { ...collectStats(), blockedScripts: state.blockedScripts, blockedRequests: state.blockedRequests, popups: state.popupsBlocked },
+      stats: { ...collectStats(), popups: state.popupsBlocked },
       probe: { mode: probeMode(), requests: state.probeCount, bytesRead: state.probeBytes },
-      manager: { handler: gmHandler(), download: !!GM_FN.download, request: !!GM_FN.request, downloadMode: gmMode(), downloaderHealth: gmDlHealth, recent: diagLog },
+      manager: { handler: gmHandler(), download: !!GM_FN.download, request: !!GM_FN.request, downloadMode: gmMode(), recent: diagLog },
       downloads: dlLog,
       thumbs: { ...thumbStats, cached: thumbCache.size, rescueQueued: rescueCount, idb: idbHealth, canvasBlocked: thumbsBlocked(), why: thumbWhy, live: liveThumbs.size, liveDead: liveDead.size, liveActive },
       saved: { count: saved.size },
@@ -3731,7 +3517,7 @@
   }
 
   /* ======================================================================
-   * 15. Safeguards: gestures, playback guard, ad scripts, requests, popups
+   * 15. Safeguards: gestures, playback guard, popups
    * ==================================================================== */
 
   function noteUserGesture(event) {
@@ -3823,6 +3609,7 @@
         if (other !== video && !other.paused) safePause(other);
       });
     }
+    stopLoadAll();
   }, true);
 
   document.addEventListener('visibilitychange', () => {
@@ -3915,118 +3702,6 @@
     };
   } catch (_) {}
 
-  function scriptBlocked(src) {
-    const blocked = settings.enabled && settings.blockAdScripts && isBlockedNetworkURL(String(src), settings.blockTrackers);
-    if (blocked) {
-      try {
-        const u = new URL(src, document.baseURI);
-        idbLogBlockedRequest(src, 'script', u.hostname);
-      } catch (_) {}
-    }
-    return blocked;
-  }
-
-  function requestBlocked(url) {
-    const blocked = settings.enabled && settings.blockAdRequests && isBlockedNetworkURL(String(url), settings.blockTrackers);
-    if (blocked) {
-      try {
-        const u = new URL(url, document.baseURI);
-        idbLogBlockedRequest(url, 'request', u.hostname);
-      } catch (_) {}
-    }
-    return blocked;
-  }
-
-  // Firefox fires this before a script runs (parser inserted or dynamic).
-  try {
-    document.addEventListener('beforescriptexecute', event => {
-      const script = event.target;
-      if (script && script.src && scriptBlocked(script.src)) {
-        event.preventDefault();
-        state.blockedScripts++;
-        scheduleUIUpdate();
-      }
-    }, true);
-  } catch (_) {}
-
-  // Stop dynamic ad scripts from even being requested.
-  try {
-    const srcDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
-    if (srcDesc && srcDesc.set && srcDesc.get) {
-      Object.defineProperty(HTMLScriptElement.prototype, 'src', {
-        configurable: true,
-        enumerable: srcDesc.enumerable,
-        get: srcDesc.get,
-        set(value) {
-          if (scriptBlocked(value)) { state.blockedScripts++; scheduleUIUpdate(); return; }
-          srcDesc.set.call(this, value);
-        }
-      });
-    }
-
-    const nativeSetAttribute = HTMLScriptElement.prototype.setAttribute;
-    HTMLScriptElement.prototype.setAttribute = function (name, value) {
-      if (typeof name === 'string' && name.toLowerCase() === 'src' && scriptBlocked(value)) {
-        state.blockedScripts++;
-        scheduleUIUpdate();
-        return;
-      }
-      return nativeSetAttribute.apply(this, arguments);
-    };
-  } catch (_) {}
-
-  try {
-    const nativeFetch = window.fetch;
-    if (typeof nativeFetch === 'function') {
-      window.fetch = function (input) {
-        let url = '';
-        try { url = typeof input === 'string' ? input : (input && (input.url || input.href)) || ''; } catch (_) {}
-        if (url && requestBlocked(url)) {
-          state.blockedRequests++;
-          scheduleUIUpdate();
-          return Promise.reject(new TypeError('Blocked by Shahvani Ultra Lite'));
-        }
-        return nativeFetch.apply(this, arguments);
-      };
-    }
-
-    const nativeOpenXhr = XMLHttpRequest.prototype.open;
-    const nativeSendXhr = XMLHttpRequest.prototype.send;
-    const xhrUrls = new WeakMap();
-    XMLHttpRequest.prototype.open = function (method, url) {
-      try { xhrUrls.set(this, String(url)); } catch (_) {}
-      return nativeOpenXhr.apply(this, arguments);
-    };
-    XMLHttpRequest.prototype.send = function () {
-      const url = xhrUrls.get(this);
-      if (url && requestBlocked(url)) {
-        state.blockedRequests++;
-        scheduleUIUpdate();
-        const xhr = this;
-        window.setTimeout(() => {
-          try {
-            xhr.dispatchEvent(new ProgressEvent('error'));
-            xhr.dispatchEvent(new ProgressEvent('loadend'));
-          } catch (_) {}
-        }, 0);
-        return;
-      }
-      return nativeSendXhr.apply(this, arguments);
-    };
-
-    if (typeof navigator.sendBeacon === 'function') {
-      const nativeBeacon = navigator.sendBeacon;
-      navigator.sendBeacon = function (url) {
-        if (url && requestBlocked(url)) {
-          state.blockedRequests++;
-          scheduleUIUpdate();
-          return true;
-        }
-        return nativeBeacon.apply(this, arguments);
-      };
-    }
-  } catch (_) {}
-
   try {
     const nativeWindowOpen = window.open;
     window.open = function () {
@@ -4054,8 +3729,8 @@
   const SEL_KEY = 'shvUltraLite.selection.v1';
   const MAX_SELECTION = 300;
   const DOWNLOAD_GAP_MS = 500;        // gap between two download clicks (Firefox owns the queue)
-  const DOWNLOAD_CONFIRM_OVER = 10;   // more than this needs a second tap
-  const LOAD_ALL_GAP_MS = 200;
+  const LOAD_ALL_PARALLEL = 3;               // v3.6.6: videos buffering at the same time during "Unlock & Load All" (25 at once starved playback)
+  const LOAD_ALL_STEP_TIMEOUT_MS = 10000;    // a video that shows no first frame in this time does not hold the queue back
   const LOAD_ALL_WARN_OVER = 20;
   const LOAD_ALL_HOLD_MS = 30000;     // v3.6.1: after Unlock & Load All the site cannot start playback for this long (or until the first tap on the page)
   const THUMB_MAX_SIDE = 240;         // longest side of a stored thumbnail (the whole picture, never cropped)
@@ -4080,7 +3755,6 @@
   const dlHydrated = new Set();  // keys whose IndexedDB lookup was started on this page
   const dlHydrateDone = new Set(); // ... and finished: the cache is always asked before the network
   const dlMetaSaved = new Set();
-  let dlBusy = false;
   let dlRowTimer = 0;
   let dlPollTimer = 0;
   let dlInfoBusy = false;
@@ -4172,7 +3846,7 @@
     } catch (_) { return 'unknown'; }
   }
 
-  const thumbStats = { captured: 0, blank: 0, tainted: 0, rescued: 0, failed: 0, unpainted: 0, seeked: 0, seekFail: 0, liveSaved: 0 };
+  const thumbStats = { captured: 0, blank: 0, tainted: 0, rescued: 0, failed: 0, unpainted: 0, liveSaved: 0, purged: 0 };
   
   /**
    * v3.6.5: can pixels be read back from a canvas at all? (Firefox for Android: hardware-decoded video frames come out blank,
@@ -4195,13 +3869,19 @@
     return blocked;
   }
 
-  /* ---- v3.6.5: live preview of an OPENED video - the browser paints the frame itself (no canvas needed) ----
-   * Firefox for Android cannot read the frames of a video back through a canvas (blank / black), so a row whose video you
-   * opened but that has no thumbnail shows the video itself: first frame, muted, never played. Only videos that already hold
-   * data are used (rows of videos you never opened stay empty), at most 2 at a time, only rows on screen. As soon as a
-   * readable frame can be taken it is cached for good and the preview is dropped (its connection is released). */
+  /* ---- live preview of an OPENED video - the browser paints the frame itself (no canvas read of a hidden video) ----
+   * Firefox for Android cannot read the frames of a video back through a canvas (blank / black) unless the video is really on
+   * screen, and a video of another origin without CORS headers can never be read back at all. So a row whose video you opened
+   * but that has no thumbnail shows the video itself (first frame, muted, never played) and tries three stages:
+   *   cors  - the address with CORS: readable when the host allows it (and always for the same origin);
+   *   blob  - the host sends no CORS: Tampermonkey reads the first THUMB_VIDEO_BYTES (one Range request) and the video is
+   *           played from that same-origin blob, so the painted frame IS readable and is cached for good;
+   *   plain - last resort: shown from the address, display only (cannot be cached).
+   * Only videos that already hold data are used (rows of videos you never opened stay empty), at most 2 loading at a time, only
+   * rows on screen, at most LIVE_MAX_KEPT at once. A readable painted frame is cached for good and the preview is dropped
+   * (connection released); leaving the Download tab drops all of them. */
   const thumbFailed = new Set();     // keys for which no canvas route gave a picture
-  const liveThumbs = new Map();
+  const liveThumbs = new Map();      // key -> { key, url, box, video, stage, blobUrl, began, slot, dead, captured, timer }
   const liveDead = new Set();
   const liveWait = [];
   const liveHost = new WeakMap();
@@ -4210,9 +3890,18 @@
   let liveActive = 0;
   let liveIO = null;
 
-  function wantLive(key, url, poster, opened) {
-    return !!settings.livePreview && !!opened && !poster && !liveDead.has(key) && !thumbCache.has(key) && linkInfo(url).ok
-      && (IS_ANDROID || thumbsBlocked() || thumbFailed.has(key));
+  /** `decoded` false = the video holds only its metadata (no frame to draw): the live route is needed on every platform. */
+  function wantLive(key, url, poster, opened, decoded) {
+    return state.open && !!opened && !poster && !liveDead.has(key) && !thumbCache.has(key) && linkInfo(url).ok
+      && (IS_ANDROID || thumbsBlocked() || thumbFailed.has(key) || decoded === false)
+      && (liveThumbs.has(key) || liveThumbs.size < LIVE_MAX_KEPT);
+  }
+
+  const liveReadable = rec => rec.stage === 'cors' || rec.stage === 'blob';
+  const liveBlobUsable = url => !!GM_FN.request && isCrossOrigin(url) && !gmHostBlocked(url);
+
+  function liveRevoke(rec) {
+    if (rec.blobUrl) { try { URL.revokeObjectURL(rec.blobUrl); } catch (_) {} rec.blobUrl = ''; }
   }
 
   function liveSlotFree(rec) {
@@ -4221,7 +3910,32 @@
     while (liveActive < LIVE_MAX_ACTIVE && liveWait.length) liveBegin(liveWait.shift());
   }
 
-  function liveSrc(rec) { rec.video.src = rec.url + (rec.url.indexOf('#') < 0 ? '#t=0.5' : ''); }
+  function liveSrc(rec) {
+    const base = rec.stage === 'blob' && rec.blobUrl ? rec.blobUrl : rec.url;
+    rec.video.src = base + (base.indexOf('#') < 0 ? '#t=0.5' : '');
+  }
+
+  function livePlain(rec) {
+    rec.stage = 'plain';
+    liveRevoke(rec);
+    rec.video.removeAttribute('crossorigin');
+    liveSrc(rec);
+  }
+
+  function liveBlobStart(rec) {
+    rec.stage = 'blob';
+    gmGetBlob(rec.url, THUMB_VIDEO_BYTES).then(blob => {
+      if (rec.dead || liveThumbs.get(rec.key) !== rec) return;
+      const type = /^video\//.test(blob.type || '') ? blob.type : mimeOfVideo(rec.url);
+      rec.blobUrl = URL.createObjectURL(new Blob([blob], { type }));
+      rec.video.removeAttribute('crossorigin');           // a blob of our own origin is readable without CORS
+      liveSrc(rec);
+    }).catch(err => {
+      if (rec.dead || liveThumbs.get(rec.key) !== rec) return;
+      diagNote('thumb', rec.url, 'blob preview: ' + errCode(err));
+      livePlain(rec);
+    });
+  }
 
   function liveBegin(rec) {
     if (rec.began || rec.dead) return;
@@ -4229,7 +3943,8 @@
     rec.began = true;
     rec.slot = true;
     liveActive++;
-    rec.timer = window.setTimeout(() => liveSlotFree(rec), 15000);
+    rec.timer = window.setTimeout(() => liveSlotFree(rec), 25000);
+    rec.stage = 'cors';
     liveSrc(rec);
   }
 
@@ -4251,31 +3966,44 @@
 
   function liveRelease(rec) {
     try { rec.video.removeAttribute('src'); NATIVE.load.call(rec.video); } catch (_) {}
+    liveRevoke(rec);
     liveSlotFree(rec);
+    const i = liveWait.indexOf(rec);
+    if (i >= 0) liveWait.splice(i, 1);
     liveThumbs.delete(rec.key);
     queueRowUpdate();
   }
 
+  /** Leaving the Download tab: every preview lets go of its connection and its decoder. */
+  function liveReleaseAll() {
+    if (!liveThumbs.size) return;
+    for (const rec of Array.from(liveThumbs.values())) {
+      try { rec.video.removeAttribute('src'); NATIVE.load.call(rec.video); } catch (_) {}
+      liveRevoke(rec);
+      window.clearTimeout(rec.timer);
+    }
+    liveThumbs.clear();
+    liveWait.length = 0;
+    liveActive = 0;
+  }
+
   /** A readable preview that has painted is saved as a real thumbnail (it then survives a reload) and released. */
   function liveTryCapture(rec, attempt) {
-    if (rec.dead || rec.captured || !rec.cors || thumbsBlocked() || !(rec.video.videoWidth > 0)) return;
+    if (rec.dead || rec.captured || !liveReadable(rec) || thumbsBlocked() || !(rec.video.videoWidth > 0)) return;
     if (typeof rec.video.mozPaintedFrames === 'number' && rec.video.mozPaintedFrames < 1) {
-      if ((attempt || 0) < 5) window.setTimeout(() => liveTryCapture(rec, (attempt || 0) + 1), 600);
+      if ((attempt || 0) < 6) window.setTimeout(() => liveTryCapture(rec, (attempt || 0) + 1), 600);
       return;
     }
     storeThumb(rec.key, rec.video, rec.video.videoWidth, rec.video.videoHeight, 'frame', '', 1);
     const got = thumbCache.get(rec.key);
     if (got && got.url) { rec.captured = true; thumbStats.liveSaved++; liveRelease(rec); }
-    else if ((attempt || 0) < 3) window.setTimeout(() => liveTryCapture(rec, (attempt || 0) + 1), 800);
+    else if ((attempt || 0) < 4) window.setTimeout(() => liveTryCapture(rec, (attempt || 0) + 1), 800);
   }
 
+  /** The box shows ▶ until the browser has a frame to show (a waiting or failing row is never an empty box). */
   function liveThumbNode(key, url, host) {
     let rec = liveThumbs.get(key);
     if (!rec) {
-      if (liveThumbs.size >= LIVE_MAX_KEPT) {
-        const old = liveThumbs.get(liveThumbs.keys().next().value);
-        if (old) liveRelease(old);
-      }
       const video = document.createElement('video');
       unsafeVideos.add(video);        // our own lock must not touch it
       video.muted = true;
@@ -4284,11 +4012,13 @@
       video.setAttribute('playsinline', '');
       video.preload = 'metadata';
       video.crossOrigin = 'anonymous';
-      video.style.aspectRatio = '16 / 9';
-      rec = { key, url, video, cors: true, began: false, slot: false, dead: false, captured: false, timer: 0 };
+      const glyph = h('span', { class: 'lvg', text: '▶', 'aria-hidden': 'true' });
+      const box = h('div', { class: 'lvbox' }, glyph, video);
+      rec = { key, url, box, video, stage: 'cors', blobUrl: '', began: false, slot: false, dead: false, captured: false, timer: 0 };
       liveThumbs.set(key, rec);
-      video.addEventListener('loadedmetadata', () => { if (video.videoWidth > 0) video.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight; });
+      video.addEventListener('loadedmetadata', () => { if (video.videoWidth > 0) box.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight; });
       const painted = () => {
+        box.classList.add('ready');
         liveSlotFree(rec);
         if (typeof video.requestVideoFrameCallback === 'function') video.requestVideoFrameCallback(() => liveTryCapture(rec, 0));
         window.setTimeout(() => liveTryCapture(rec, 0), 500);
@@ -4296,14 +4026,14 @@
       video.addEventListener('loadeddata', painted);
       video.addEventListener('seeked', painted);
       video.addEventListener('error', () => {
-        if (rec.cors) {                // the host sends no CORS headers: show it without CORS (display only, no saved copy)
-          rec.cors = false;
-          video.removeAttribute('crossorigin');
-          liveSrc(rec);
+        if (rec.stage === 'cors') {      // the host sends no CORS headers
+          if (liveBlobUsable(url)) liveBlobStart(rec); else livePlain(rec);
           return;
         }
+        if (rec.stage === 'blob') { livePlain(rec); return; }     // e.g. the header is at the end of the file: not in the first bytes
         rec.dead = true;
         liveDead.add(key);
+        liveRevoke(rec);
         liveSlotFree(rec);
         liveThumbs.delete(key);
         thumbStats.failed++;
@@ -4312,14 +4042,14 @@
       });
     }
     liveObserve(rec, host);
-    return rec.video;
+    return rec.box;
   }
 
   function commitThumb(key, url, canvas, kind, remote, early) {
     thumbCache.delete(key);
     thumbCache.set(key, { url, canvas: url ? null : canvas, kind, remote: !!remote, early: !!early });
     while (thumbCache.size > THUMB_MAX) thumbCache.delete(thumbCache.keys().next().value);
-    if (url) { idbSaveThumb(key, url, kind, remote); savedNoteThumb(key, url, remote); }
+    if (url) { idbSaveThumb(key, url, kind, remote); savedNoteThumb(key, url, remote); if (!remote) markThumbChecked(key); }
     queueRowUpdate();
   }
 
@@ -4352,7 +4082,7 @@
       if (url) { thumbStats.captured++; commitThumb(key, url, canvas, kind, false, early); return true; }
       thumbStats.tainted++;
       if (kind === 'poster' && origin && !(old && old.url)) commitThumb(key, origin, null, 'poster', true);
-      else if (kind !== 'poster') commitThumb(key, '', canvas, kind, false, early);   // v3.6.5: also on Android (it was skipped there: no thumbnail at all)
+      else if (kind !== 'poster' && !IS_ANDROID) commitThumb(key, '', canvas, kind, false, early);   // Android: a tainted frame is often black and cannot be checked - the live route makes the real one
       if (origin && !(old && old.url && !old.remote)) queueRescue(key, kind, origin, '');
       return true;
     } catch (_) { return false; }
@@ -4579,7 +4309,7 @@
   function queueRescue(key, kind, origin, fallback) {
     if (!key || !origin || !/^https?:/i.test(origin)) return;
     if (kind === 'poster' && thumbsBlocked()) { if (!thumbCache.has(key)) commitThumb(key, origin, null, 'poster', true); return; }
-    if (kind === 'frame' && thumbsBlocked()) return;
+    if (kind === 'frame' && (IS_ANDROID || thumbsBlocked())) return;     // Android: frames come from the live route (one read of the first bytes)
     const tag = kind + ':' + key;
     if (rescueTried.has(tag) || rescueCount >= RESCUE_CAP) return;
     rescueTried.add(tag);
@@ -4607,67 +4337,6 @@
     } catch (_) { return true; }
   }
 
-  /**
-   * v3.6.5: Firefox for Android often loads only the METADATA of an opened video (the duration is known, readyState stays 1):
-   * no frame is ever decoded, so nothing can be drawn. A short seek makes the browser decode one frame of the part it
-   * needs (a few hundred KB of a video the person already opened); the frame is taken and the position is put back.
-   * Once per video, one video at a time, never while the video plays.
-   */
-  const seekTried = new WeakSet();
-  const seekQueue = [];
-  let seekBusy = false;
-
-  function pumpSeek() {
-    if (seekBusy || !seekQueue.length) return;
-    const [video, entry] = seekQueue.shift();
-    if (!video.isConnected && !(entry && entry.element === video)) { window.setTimeout(pumpSeek, 0); return; }
-    seekBusy = true;
-    const orig = video.currentTime || 0;
-    let finished = false;
-    let timer = 0;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      window.clearTimeout(timer);
-      video.removeEventListener('seeked', onSeeked);
-      try { if (Math.abs((video.currentTime || 0) - orig) > 0.05) video.currentTime = orig; } catch (_) {}
-      seekBusy = false;
-      window.setTimeout(pumpSeek, 400);
-    };
-    const grab = () => {
-      if (finished) return;
-      thumbStats.seeked++;
-      if (!captureAny(video, entry)) thumbStats.seekFail++;
-      finish();
-    };
-    const onSeeked = () => {
-      if (typeof video.requestVideoFrameCallback === 'function') { video.requestVideoFrameCallback(grab); window.setTimeout(grab, 900); }
-      else window.setTimeout(grab, 300);
-    };
-    video.addEventListener('seeked', onSeeked, { once: true });
-    timer = window.setTimeout(() => { noteWhy('seek-to-decode timed out'); finish(); }, 8000);
-    try {
-      const d = Number.isFinite(video.duration) ? video.duration : 0;
-      const at = d > 0 ? (d < 2 ? d / 2 : Math.min(Math.max(1, d * 0.05), Math.max(0, d - 0.5), 3)) : 1;
-      video.currentTime = at;
-    } catch (err) { noteWhy('seek failed: ' + (err && err.name)); finish(); }
-  }
-
-  function decodeBySeek(video, entry, wait) {
-    if (!(video instanceof HTMLVideoElement) || seekTried.has(video)) return;
-    const go = () => {
-      if (seekTried.has(video) || video.readyState >= 2 || video.readyState < 1 || !video.paused || video.ended) return;
-      if ((video.currentTime || 0) > 0.5) return;                    // it is being watched / resumed: decoding happens by itself
-      const key = keyOfVideo(video, entry || videoStates.get(video));
-      const cur = key ? thumbCache.get(key) : null;
-      if (!key || (cur && !cur.early)) return;
-      seekTried.add(video);
-      seekQueue.push([video, entry || videoStates.get(video)]);
-      pumpSeek();
-    };
-    if (wait > 0) window.setTimeout(go, wait); else go();
-  }
-
   /** A decoded frame of any <video> of the page (locked-and-opened, opened by the site, or the script is Off). */
   const blankTries = new WeakMap();
   const goodFrame = new WeakSet();     // videos whose thumbnail was taken after the first second
@@ -4675,7 +4344,6 @@
     if (!(video instanceof HTMLVideoElement)) return false;
     if (video.readyState < 2 || !(video.videoWidth > 0)) {
       noteWhy('no decoded frame yet (readyState ' + video.readyState + ')');
-      if (video.readyState >= 1) decodeBySeek(video, entry, 1500);
       return false;
     }
     const key = keyOfVideo(video, entry || videoStates.get(video));
@@ -4733,7 +4401,6 @@
     const video = event.target;
     if (!(video instanceof HTMLVideoElement)) return;
     if (event.type === 'loadeddata') captureAny(video);
-    else if (event.type === 'loadedmetadata') { if (video.readyState < 2) decodeBySeek(video, videoStates.get(video), 1500); }
     else if (event.type === 'timeupdate') {                              // v3.6.5: the frame after the first second (the opening is often black)
       if (video.currentTime < 1.2 || goodFrame.has(video)) return;
       captureAny(video);
@@ -4754,23 +4421,7 @@
       if (video.readyState < 1) continue;
       noteVideoDuration(video);
       if (video.readyState >= 2) captureAny(video);
-      else decodeBySeek(video, videoStates.get(video), 0);
     }
-  }
-
-  /** The button "Make thumbnails of opened videos": one more try for every video of the page that holds data but has no picture. */
-  function makeThumbsNow() {
-    let n = 0;
-    for (const video of document.querySelectorAll('video')) {
-      if (video.readyState < 1) continue;
-      const key = keyOfVideo(video, videoStates.get(video));
-      const cur = key ? thumbCache.get(key) : null;
-      if (!key || (cur && !cur.early)) continue;
-      n++;
-      blankTries.delete(video);
-      if (video.readyState >= 2) captureAny(video); else { seekTried.delete(video); decodeBySeek(video, videoStates.get(video), 0); }
-    }
-    setStatus(n ? 'stThumbsMaking' : 'stThumbsNone', { n }, true);
   }
 
   /* ---- duration / size knowledge ---- */
@@ -4803,7 +4454,7 @@
       if (rec.live && !dlHydrated.has(rec.key)) { dlHydrated.add(rec.key); need.push(rec.key); }
     }
     if (!need.length) return Promise.resolve();
-    return Promise.all([idbGetThumbs(need), idbGetVideoMetaMany(need)]).then(([thumbs, metas]) => {
+    return Promise.all([idbGetThumbs(need).then(m => verifyStoredThumbs(m, idbDeleteThumb)), idbGetVideoMetaMany(need)]).then(([thumbs, metas]) => {
       for (const [key, th] of thumbs) if (!thumbCache.has(key)) thumbCache.set(key, { url: th.url, canvas: null, kind: th.kind, remote: !!th.remote });
       for (const [key, m] of metas) learnInfo(key, m.duration, m.size);
     }).catch(() => {}).then(() => {
@@ -4858,7 +4509,7 @@
         const raw = (entry && entry.poster) || el.getAttribute('poster') || '';
         if (raw && isUsableURL(raw) && !isBlobURL(raw)) poster = new URL(raw, document.baseURI).href;
       } catch (_) {}
-      rows.push({ key, url, index: n, duration, size, live: true, poster, opened: el.readyState >= 1 });
+      rows.push({ key, url, index: n, duration, size, live: true, poster, opened: el.readyState >= 1, decoded: el.readyState >= 2 });
     }
     // v3.6.3: only videos of THIS page are listed, selectable, downloadable and copyable (no rows left over from other pages)
     return rows;
@@ -4898,8 +4549,13 @@
     return id === 'download' && selection.size ? t(key) + ' (' + selection.size + ')' : t(key);
   }
 
+  /** The Download list is live only while the menu is OPEN (a closed menu keeps its DOM: nothing may refresh, probe or preview then). */
   function dlActive() {
-    return !!(dlUI.box && dlUI.box.isConnected);
+    return !!(dlUI.box && dlUI.box.isConnected && state.open);
+  }
+
+  function svActive() {
+    return !!(svUI.box && svUI.box.isConnected && state.open);
   }
 
   /** A video whose size or duration is still unknown and whose lookup is not running / out of tries. */
@@ -5030,12 +4686,6 @@
     return String(e.error || e.message || 'error') + (detail ? ' (' + String(detail).slice(0, 80) + ')' : '');
   }
 
-  /** The video's address stays usable when nothing else works: copied (always) and opened in a tab (a popup blocker may stop it). */
-  function linkFallback(urls) {
-    const list = Array.isArray(urls) ? urls : [urls];
-    copyText(list.join('\n')).catch(() => {});
-    openInTab(list[0]);
-  }
 
   const DL_CONCURRENCY = IS_ANDROID ? 2 : 3;   // manager downloads running at the same time (the browser keeps its own queue)
   const DL_FIRST_ANSWER_MS = 20000;            // v3.6.4: a manager downloader that says NOTHING for this long has not started (it used to count as 'running')
@@ -5045,22 +4695,6 @@
     dlLog.push({ t: new Date().toISOString().slice(11, 19), name: String(name).slice(0, 40), via, ok: !!ok, err: String(err || '').slice(0, 140) });
     while (dlLog.length > 14) dlLog.shift();
   }
-
-  /**
-   * v3.6.4: does the manager's own downloader work on this device at all? (Firefox for Android has no downloads API, so
-   * Tampermonkey's GM_download may say nothing and never start a file.) One failure with no success before it switches
-   * 'auto' to the other ways for the rest of the tab's life; the 'Tampermonkey' method in the menu still always tries it.
-   */
-  const GMDL_HEALTH_KEY = 'shv.gmdl.v1';
-  const gmDlHealth = (() => {
-    try { const o = JSON.parse(sessionStorage.getItem(GMDL_HEALTH_KEY) || 'null'); if (o) return { ok: +o.ok || 0, bad: +o.bad || 0 }; } catch (_) {}
-    return { ok: 0, bad: 0 };
-  })();
-  function gmDlNote(good) {
-    if (good) gmDlHealth.ok++; else gmDlHealth.bad++;
-    try { sessionStorage.setItem(GMDL_HEALTH_KEY, JSON.stringify(gmDlHealth)); } catch (_) {}
-  }
-  function gmDlBroken() { return gmDlHealth.bad >= 1 && gmDlHealth.ok === 0; }
 
   /**
    * Stage 1: the manager's own downloader. { ok } | { ok: false, err, silent? }.
@@ -5182,50 +4816,41 @@
   }
 
   /**
-   * One job. Order depends on Settings > Download method (dlMethod):
-   *   auto - same origin: Firefox's own link (desktop) / the manager's downloader first (Android); another origin: the manager.
-   *   link - the browser only: a link (same origin) or the manager fetching a blob that the browser saves (another origin).
-   *   gm   - the manager's downloader first, always.
-   * The manager chain: downloader (with Referer) -> again without custom headers -> blob -> page fetch -> failed.
+   * One job - the browser saves every file (v3.6.6: the "Download method" choice is gone):
+   *   same origin   -> a plain link (Firefox's own download; Android asks once per file, nothing a page can change).
+   *   another origin -> the manager fetches the bytes as a blob (the browser may not read them itself) and the browser saves
+   *                     that blob; then the page's own fetch (when the host sends CORS headers).
+   *   last resort    -> the manager's own downloader (streams to disk). Only reached when a file is too big to be held in memory
+   *                     or both routes above failed; it must answer within 20 s, otherwise the file counts as failed.
    * Whatever starts a file reports how ('via'): it is shown in the summary and in the diagnostics.
    */
   async function runDownloadJob(job) {
     const name = fileNameOf(job.url);
     const notes = [];
-    const method = settings.dlMethod;
-    const sameOrigin = job.mode === 'native';
-    const gmDl = !!GM_FN.download && gmMode() !== 'disabled';
     const started = via => { dlLogAdd(name, via, true, ''); return { ok: true, name, via }; };
     if (job.mode === 'tab') { dlQ.tabLinks.push(job.url); dlLogAdd(name, 'tab', false, 'no Tampermonkey download'); return { ok: false, name, err: 'no Tampermonkey download (link copied)' }; }
-
-    const tryGmDl = gmDl && method !== 'link' && (method === 'gm' || !gmDlBroken()) && (!sameOrigin || IS_ANDROID || method === 'gm');
-    if (sameOrigin && !tryGmDl) { await nativeClick(job.url); return started('link'); }
-
-    if (tryGmDl) {
-      setStatus('stDlGmStart', { i: dlQ.done + dlQ.failed.length + 1, n: dlQ.total, name });
-      let first = await gmDownloadStage(job.url, name, true, true);
-      if (!first.ok && !first.silent) {
-        notes.push('Tampermonkey: ' + first.err);
-        first = await gmDownloadStage(job.url, name, false, true);
-      }
-      if (!first.ok) notes.push('Tampermonkey' + (first.silent ? '' : ' (no headers)') + ': ' + first.err);
-      gmDlNote(first.ok);
-      if (first.ok) { if (first.running) setStatus('stDlGmRunning', { name }); return started('tm'); }
-    } else if (!sameOrigin) {
-      notes.push(!GM_FN.download ? 'no Tampermonkey download' : (method === 'link' ? 'Tampermonkey downloader skipped (Download method: browser)' : 'Tampermonkey downloader skipped (it did not start a file earlier)'));
-    }
-    if (sameOrigin) { await nativeClick(job.url); return started('link'); }   // same origin: the plain link is the last option
+    if (job.mode === 'native') { await nativeClick(job.url); return started('link'); }
 
     const size = (dlInfo.get(job.key) && dlInfo.get(job.key).size) || (selection.get(job.key) && selection.get(job.key).s) || (saved.get(job.key) && saved.get(job.key).s) || 0;
     if (GM_FN.request) {
       setStatus('stDlBlob', { name });
       const second = await gmBlobStage(job.url, name, size);
       if (second.ok) return started('tm-blob');
-      notes.push('fallback: ' + second.err);
+      notes.push('manager blob: ' + second.err);
+    } else {
+      notes.push('no Tampermonkey request API');
     }
     const third = await fetchBlobStage(job.url, name, size);
     if (third.ok) return started('page-fetch');
     notes.push(third.err);
+
+    if (GM_FN.download && gmMode() !== 'disabled') {
+      setStatus('stDlGmStart', { i: dlQ.done + dlQ.failed.length + 1, n: dlQ.total, name });
+      let last = await gmDownloadStage(job.url, name, true, true);
+      if (!last.ok && !last.silent) last = await gmDownloadStage(job.url, name, false, true);
+      if (last.ok) { if (last.running) setStatus('stDlGmRunning', { name }); return started('tm'); }
+      notes.push('Tampermonkey downloader: ' + last.err);
+    }
     const err = notes.join(' | ');
     dlLogAdd(name, 'failed', false, err);
     return { ok: false, name, err };
@@ -5241,7 +4866,6 @@
     const skipped = dlQ.skipped;
     const viaKeys = { tm: 'viaTm', link: 'viaLink', 'tm-blob': 'viaBlob', 'page-fetch': 'viaFetch' };
     const via = Object.keys(dlQ.via).length ? ' (' + Object.keys(dlQ.via).map(k => t(viaKeys[k] || 'viaLink') + ' ' + dlQ.via[k]).join(', ') + ')' : '';
-    dlBusy = false;
     if (failed.length) {
       const links = failed.map(item => item.job.url);
       copyText(links.join('\n')).catch(() => {});
@@ -5286,7 +4910,6 @@
     if (!jobs.length) { setStatus(recs.length && !skipped ? 'stDlBusy' : 'stDlUnavailable', { m: skipped }, true); return; }
 
     if (!dlQ.running && !dlQ.pending.length) { dlQ.failed = []; dlReport(''); }
-    dlBusy = true;
     dlQ.skipped += skipped;
     dlQ.total += jobs.length;
     for (const job of jobs) { dlQ.active.add(job.url); dlQ.pending.push(job); }
@@ -5323,29 +4946,68 @@
   const savedInfoTried = new Set();
   let savedProbeBusy = false;
 
-  function savedLoad() {
+  const savedDeleted = new Set();     // keys un-saved in THIS tab since the last write (so a merge does not bring them back)
+
+  function savedParse(raw) {
+    const out = new Map();
     try {
-      const list = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
-      if (!Array.isArray(list)) return;
+      const list = JSON.parse(raw || '[]');
+      if (!Array.isArray(list)) return out;
       for (const r of list.slice(0, SAVED_MAX)) {
         if (r && typeof r.k === 'string' && typeof r.u === 'string' && /^https?:/i.test(r.u)) {
-          saved.set(r.k, { k: r.k, u: r.u, n: String(r.n || ''), t: String(r.t || ''), p: String(r.p || ''), a: +r.a || 0, d: +r.d || 0, s: +r.s || 0 });
+          out.set(r.k, { k: r.k, u: r.u, n: String(r.n || ''), t: String(r.t || ''), p: String(r.p || ''), a: +r.a || 0, d: +r.d || 0, s: +r.s || 0 });
         }
       }
     } catch (_) {}
+    return out;
+  }
+
+  function savedReadStorage() {
+    try { return savedParse(localStorage.getItem(SAVED_KEY)); } catch (_) { return new Map(); }
+  }
+
+  function savedLoad() {
+    for (const [k, r] of savedReadStorage()) saved.set(k, r);
   }
   savedLoad();
 
+  /**
+   * v3.6.6: several tabs share one list. A write first merges what is in storage (another tab may have saved something
+   * meanwhile): storage entries stay unless THIS tab removed them, this tab's entries win. Before, each tab wrote its own
+   * whole list and silently dropped what another tab had saved.
+   */
   function savedFlush() {
     window.clearTimeout(savedPersistTimer);
     savedPersistTimer = 0;
-    try { localStorage.setItem(SAVED_KEY, JSON.stringify(Array.from(saved.values()))); } catch (err) { diagNote('saved', '', err); }
+    try {
+      const merged = savedReadStorage();
+      for (const key of savedDeleted) merged.delete(key);
+      for (const [key, rec] of saved) merged.set(key, rec);
+      const list = Array.from(merged.values()).sort((x, y) => y.a - x.a).slice(0, SAVED_MAX);
+      saved.clear();
+      for (const rec of list) saved.set(rec.k, rec);
+      localStorage.setItem(SAVED_KEY, JSON.stringify(list));
+      savedDeleted.clear();
+    } catch (err) { diagNote('saved', '', err); }
   }
   function savedPersist() {
     window.clearTimeout(savedPersistTimer);
     savedPersistTimer = window.setTimeout(savedFlush, 150);
   }
   window.addEventListener('pagehide', () => { if (savedPersistTimer) savedFlush(); });
+
+  /** Another tab changed the list: adopt it (minus what this tab is about to remove) and refresh what is on screen. */
+  window.addEventListener('storage', event => {
+    if (event.key !== SAVED_KEY) return;
+    const stored = savedParse(event.newValue);
+    for (const key of savedDeleted) stored.delete(key);
+    for (const [key, rec] of saved) if (!stored.has(key) && savedPersistTimer) stored.set(key, rec);   // an unsaved local addition stays
+    saved.clear();
+    for (const [key, rec] of stored) saved.set(key, rec);
+    for (const key of Array.from(savedSel)) if (!saved.has(key)) savedSel.delete(key);
+    savedThumbsReady = null;
+    if (state.ui) { syncSavedUI(); if (state.open && state.savedView) renderAll(); }
+  });
 
   function savedList() {
     return Array.from(saved.values()).sort((x, y) => y.a - x.a);
@@ -5365,6 +5027,7 @@
   function savedThumbPut(key, url, remote) {
     if (!key || !url) return;
     savedThumbs.set(key, { url, remote: !!remote });
+    if (!remote) markThumbChecked(key);
     idbInit().then(db => new Promise((resolve, reject) => {
       if (!db.objectStoreNames.contains('savedThumbs')) { reject(new Error('no savedThumbs store')); return; }
       const tx = db.transaction('savedThumbs', 'readwrite');
@@ -5400,7 +5063,12 @@
       }
       tx.oncomplete = () => resolve();
       tx.onerror = tx.onabort = () => resolve();
-    })).catch(err => { diagNote('idb', 'savedThumbs read', err); });
+    })).catch(err => { diagNote('idb', 'savedThumbs read', err); }).then(async () => {
+      const mine = new Map();
+      for (const k of keys) if (savedThumbs.has(k)) mine.set(k, savedThumbs.get(k));
+      const good = await verifyStoredThumbs(mine, savedThumbDelete);
+      for (const k of mine.keys()) if (!good.has(k)) savedThumbs.delete(k);
+    });
     return savedThumbsReady;
   }
 
@@ -5417,6 +5085,7 @@
     if (!info.ok) return false;
     if (saved.has(rec.key)) return true;
     if (saved.size >= SAVED_MAX) { setStatus('stSavedFull', { n: SAVED_MAX }, true); return false; }
+    savedDeleted.delete(rec.key);
     const known = dlInfo.get(rec.key);
     saved.set(rec.key, {
       k: rec.key,
@@ -5436,6 +5105,7 @@
 
   function unsaveKey(key) {
     if (!saved.delete(key)) return;
+    savedDeleted.add(key);
     savedSel.delete(key);
     savedThumbDelete(key);
     savedPersist();
@@ -5487,15 +5157,27 @@
     return button;
   }
 
+  /** The page's videos that hold data, by key (refreshed at most once a second): a saved video that is open HERE may show a live preview. */
+  let savedOpenedCache = { t: 0, map: new Map() };
+  function savedOpenedInfo(key) {
+    if (Date.now() - savedOpenedCache.t > 1000) {
+      savedOpenedCache = { t: Date.now(), map: new Map(downloadRows().filter(r => r.opened).map(r => [r.key, r])) };
+    }
+    return savedOpenedCache.map.get(key) || null;
+  }
+
   function paintSavedRow(ref) {
     const item = saved.get(ref.item.k) || ref.item;
     ref.item = item;
     const cached = thumbCache.get(item.k) || savedThumbs.get(item.k) || null;
-    const sig = cached ? cached.url || cached.canvas : null;
-    if (ref.thumbOf !== sig || (!cached && ref.thumbOf === undefined)) {
+    const open = cached ? null : savedOpenedInfo(item.k);
+    const live = !cached && wantLive(item.k, item.u, '', !!open, open ? open.decoded : true);
+    const sig = cached ? cached.url || cached.canvas : (live ? 'live' : null);
+    const liveRec = live ? liveThumbs.get(item.k) : null;
+    if (ref.thumbOf !== sig || (liveRec && liveRec.box.parentNode !== ref.thumb) || (!cached && !live && ref.thumbOf === undefined)) {
       ref.thumbOf = sig;
       ref.thumb.textContent = '';
-      const node = cached ? thumbNode(cached) : null;
+      const node = cached ? thumbNode(cached) : (live ? liveThumbNode(item.k, item.u, ref.thumb) : null);
       if (node) ref.thumb.append(node); else ref.thumb.textContent = '▶';
       ref.thumb.classList.toggle('has', !!node);
     }
@@ -5508,7 +5190,7 @@
   }
 
   function paintSavedRows() {
-    if (!svUI.box || !svUI.box.isConnected) return;
+    if (!svActive()) return;
     for (const ref of svUI.rows.values()) paintSavedRow(ref);
   }
 
@@ -5553,7 +5235,7 @@
   }
 
   function refreshSavedUI() {
-    if (!svUI.box || !svUI.box.isConnected) return;
+    if (!svActive()) return;
     svUI.count.textContent = t('svCount', { n: saved.size, m: savedSel.size });
     for (const btn of [svUI.btnDl, svUI.btnCopy, svUI.btnRemove]) if (btn) btn.refresh();
     if (svUI.empty) svUI.empty.style.display = saved.size ? 'none' : '';
@@ -5588,7 +5270,7 @@
 
   /** Sizes / durations / pictures that a saved video still lacks are looked up one at a time while the list is open. */
   function savedProbeNext() {
-    if (savedProbeBusy || document.hidden) return;
+    if (savedProbeBusy || document.hidden || !svActive()) return;
     const item = savedList().find(i => !(i.d > 0 && i.s > 0) && !savedInfoTried.has(i.k) && linkInfo(i.u).ok);
     if (!item) return;
     savedInfoTried.add(item.k);
@@ -5619,7 +5301,7 @@
   function startSavedPoll() {
     if (svPollTimer) return;
     svPollTimer = window.setInterval(() => {
-      if (!svUI.box || !svUI.box.isConnected) { window.clearInterval(svPollTimer); svPollTimer = 0; return; }
+      if (!svActive()) { window.clearInterval(svPollTimer); svPollTimer = 0; return; }
       paintSavedRows();
       savedProbeNext();
     }, 1500);
@@ -5790,8 +5472,7 @@
    */
   function unlockEntry(entry) {
     if (!state.mediaEntries.has(entry) || entry.loaded || !entry.element || !entry.element.isConnected) return false;
-    entry.fullLoad = true;
-    try { activateVideo(entry, false, true); } finally { entry.fullLoad = false; }
+    activateVideo(entry, false, true);
     if (!entry.loaded) return false;
     const now = Date.now();
     entry.unlockedAt = now;
@@ -5801,8 +5482,12 @@
   }
 
   /**
-   * "Unlock & Load All Videos": every locked video, one after the other. Safe to repeat and to mix with Release
-   * (Release bumps loadAllRun, which stops a run that is still going).
+   * "Unlock & Load All Videos": every locked video gets its source back with preload=metadata: the browser reads the header and
+   * the first frame (duration, size, thumbnail) and then SUSPENDS the download. v3.6.6 used preload=auto, so every video kept
+   * buffering ~a minute ahead and, with many videos, they all held the connection while the one you wanted to play waited.
+   * Only LOAD_ALL_PARALLEL start at the same time; the next one starts when the previous has its header (or after
+   * LOAD_ALL_STEP_TIMEOUT_MS). Starting to play any video stops the rest of the queue (stopLoadAll).
+   * Safe to repeat and to mix with Release (Release bumps loadAllRun, which stops a run that is still going).
    */
   function loadAllVideos() {
     if (state.emergency) { setStatus('stEmergencyBlocked', null, true); return; }
@@ -5816,19 +5501,51 @@
     setStatus('stLoadAllStart', { n: list.length }, true);
     let index = 0;
     let done = 0;
+    let active = 0;
     const finish = () => {
-      if (run !== loadAllRun) return;     // Release took over
+      if (run !== loadAllRun) return;     // Release (or a started playback) took over
       loadAllBusy = false;
       setStatus('stLoadAllDone', { n: done }, true);
       scheduleUIUpdate();
     };
-    const step = () => {
+    const launch = () => {
       if (run !== loadAllRun) return;
-      if (index >= list.length || !settings.enabled || state.emergency) { finish(); return; }
-      if (unlockEntry(list[index++])) done++;
-      window.setTimeout(step, LOAD_ALL_GAP_MS);
+      while (active < LOAD_ALL_PARALLEL && index < list.length) {
+        if (!settings.enabled || state.emergency) { index = list.length; break; }
+        const entry = list[index++];
+        if (!unlockEntry(entry)) continue;
+        done++;
+        active++;
+        const video = entry.element;
+        let settled = false;
+        let timer = 0;
+        const next = () => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          if (video) { video.removeEventListener('loadedmetadata', next); video.removeEventListener('loadeddata', next); video.removeEventListener('error', next); }
+          active--;
+          launch();
+        };
+        timer = window.setTimeout(next, LOAD_ALL_STEP_TIMEOUT_MS);
+        if (!video) { window.setTimeout(next, 0); continue; }
+        // the header is what the queue waits for (first frame comes with it or later): a browser that shows no first frame for
+        // preload=metadata must not make the queue crawl
+        if (video.readyState >= 1) window.setTimeout(next, 0);
+        else { video.addEventListener('loadedmetadata', next); video.addEventListener('loadeddata', next); video.addEventListener('error', next); }
+      }
+      if (index >= list.length && active === 0) finish();
     };
-    step();
+    launch();
+  }
+
+  /** The person started to play something: the rest of an "Unlock & Load All" queue is not started (bandwidth goes to playback). */
+  function stopLoadAll() {
+    if (!loadAllBusy) return;
+    loadAllRun++;
+    loadAllBusy = false;
+    setStatus('stLoadAllStopped', null, true);
+    scheduleUIUpdate();
   }
 
   /* ---- rows ---- */
@@ -5866,9 +5583,10 @@
   function paintRow(ref) {
     const rec = ref.rec;
     const cached = thumbCache.get(rec.key) || null;
-    const live = !cached && wantLive(rec.key, rec.url, rec.poster, rec.opened);
+    const live = !cached && wantLive(rec.key, rec.url, rec.poster, rec.opened, rec.decoded);
     const sig = cached || (live ? 'live' : null);
-    if (ref.thumbOf !== sig) {
+    const liveRec = live ? liveThumbs.get(rec.key) : null;
+    if (ref.thumbOf !== sig || (liveRec && liveRec.box.parentNode !== ref.thumb)) {
       ref.thumbOf = sig;
       ref.thumb.textContent = '';
       const node = cached ? thumbNode(cached) : (live ? liveThumbNode(rec.key, rec.url, ref.thumb) : null);
@@ -6029,11 +5747,7 @@
         h('button', { class: 'btn', type: 'button', text: t('dlDeselectAll'), onclick: () => setAllSelected(false) }),
         dlUI.btnDl, dlUI.btnCopy, dlUI.btnSaved),
       dlUI.btnRetry, dlUI.err, dlUI.area));
-    f.append(h('details', { class: 'dlnote' }, h('summary', { text: t('dlNoteTitle') }), h('div', { class: 'note', text: t('dlNote') }),
-      h('div', { class: 'pad' },
-        h('button', { class: 'btn', type: 'button', text: t('dlMakeThumbs'), onclick: makeThumbsNow }),
-        checkRow('livePreview', t('livePreview'), t('livePreviewD')),
-        segment(t('dlMethod'), settings.dlMethod, [['auto', t('dlMethodAuto')], ['link', t('dlMethodLink')], ['gm', t('dlMethodGm')]], v => setOpt('dlMethod', v)))));
+    f.append(h('details', { class: 'dlnote' }, h('summary', { text: t('dlNoteTitle') }), h('div', { class: 'note', text: t('dlNote') })));
 
     dlUI.box = h('div', { class: 'dlbox' });
     dlUI.empty = h('div', { class: 'note', text: t('dlEmpty') });
@@ -6212,7 +5926,11 @@
       border-radius: 8px; overflow: hidden; display: grid; place-items: center;
       background: var(--card); border: 1px solid var(--bd); color: var(--mut); font-size: 18px; cursor: pointer; }
     .dlth.has { aspect-ratio: auto; background: var(--card); }
-    .dlth video { display: block; width: 100%; height: auto; max-height: 150px; object-fit: contain; background: var(--card); pointer-events: none; }
+    .lvbox { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 150px; display: grid; place-items: center; overflow: hidden; background: var(--card); }
+    .lvbox .lvg { opacity: .55; }
+    .lvbox video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; pointer-events: none; }
+    .lvbox.ready .lvg { display: none; }
+    .lvbox.ready video { opacity: 1; }
     .dlth canvas, .dlth img { display: block; width: 100%; height: auto; max-height: 150px; object-fit: contain;
       pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-user-drag: none; }
     @media (max-width: 380px) { .dlact { flex-direction: column; } }
@@ -6443,8 +6161,7 @@
       mk('pendingFrames', t('statPendingFrames')), mk('activeFrames', t('statActiveFrames'))));
 
     const kv = h('div', { class: 'kv' });
-    for (const [id, label] of [['filteredAds', 'filteredAds'], ['blockedScripts', 'blockedScripts'], ['blockedRequests', 'blockedRequests'],
-      ['popups', 'popupsBlocked'], ['resources', 'resources'], ['cleanedEntries', 'cleaned'], ['detachedEntries', 'detached'], ['probeStat', 'probeTraffic']]) {
+    for (const [id, label] of [['popups', 'popupsBlocked'], ['resources', 'resources'], ['cleanedEntries', 'cleaned'], ['detachedEntries', 'detached'], ['probeStat', 'probeTraffic']]) {
       kv.append(h('span', { text: t(label) }), h('span', { 'data-k': id, text: '-' }));
     }
     f.append(section(t('secStats'), kv));
@@ -6497,35 +6214,7 @@
     f.append(section(t('secFrames'),
       checkRow('lockFrames', t('lockFrames'), t('lockFramesD'), d),
       checkRow('lockSameSite', t('lockSameSite'), t('lockSameSiteD'), d)));
-    return f;
-  }
-
-  function buildAds() {
-    const f = document.createDocumentFragment();
-    const d = dim();
-    f.append(section(t('secAdFrames'),
-      checkRow('hideKnownAds', t('hideKnownAds'), t('hideKnownAdsD'), d),
-      checkRow('hideAdsFully', t('hideAdsFully'), t('hideAdsFullyD'), d)));
-    f.append(section(t('secAdNet'),
-      checkRow('blockAdScripts', t('blockAdScripts'), t('blockAdScriptsD'), d),
-      checkRow('blockAdRequests', t('blockAdRequests'), t('blockAdRequestsD'), d),
-      checkRow('blockTrackers', t('blockTrackers'), t('blockTrackersD'), d)));
-    f.append(section(t('secShield'),
-      checkRow('cosmeticAds', t('cosmeticAds'), t('cosmeticAdsD'), d),
-      checkRow('blockPopups', t('blockPopups'), t('blockPopupsD'), d)));
-
-    const area = h('textarea', { dir: 'ltr', spellcheck: 'false', placeholder: 'example-ads.com' });
-    area.value = settings.customAdHosts.join('\n');
-    f.append(section(t('secCustom'), h('div', { class: 'pad' },
-      h('div', { class: 'note', text: t('customHostsHint') }), area,
-      h('button', { class: 'btn', type: 'button', text: t('apply'), onclick: () => {
-        const list = area.value.split(/\s+/)
-          .map(x => x.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[\/:?#].*$/, ''));
-        settings.customAdHosts = sanitize({ customAdHosts: list }, { ...DEFAULTS, customAdHosts: [] }).customAdHosts;
-        saveSettings();
-        applyAll();
-        setStatus('stHosts', { n: settings.customAdHosts.length });
-      } }))));
+    f.append(section(t('secShield'), checkRow('blockPopups', t('blockPopups'), t('blockPopupsD'), d)));
     return f;
   }
 
@@ -6616,7 +6305,7 @@
         h('button', { class: 'btn', type: 'button', text: t('exportB'), onclick: () => { area.value = JSON.stringify(settings, null, 1); area.select(); } }),
         h('button', { class: 'btn', type: 'button', text: t('importB'), onclick: () => {
           try {
-            Object.assign(settings, sanitize(JSON.parse(area.value), { ...DEFAULTS, customAdHosts: [] }));
+            Object.assign(settings, sanitize(JSON.parse(area.value), { ...DEFAULTS }));
             saveSettings();
             applyAll();
             setStatus('stImported', null, true);
@@ -6627,7 +6316,7 @@
         copyText(text).then(() => setStatus('diagCopied', null, true)).catch(() => { area.value = text; area.select(); });
       } }),
       confirmButton(t('resetB'), () => t('resetConfirm'), () => {
-        Object.assign(settings, { ...DEFAULTS, customAdHosts: [] });
+        Object.assign(settings, { ...DEFAULTS });
         saveSettings();
         applyAll();
         setStatus('stReset', null, true);
@@ -6639,13 +6328,14 @@
   }
 
   const TABS = [
-    ['home', 'tabHome', buildHome], ['download', 'tabDownload', buildDownload], ['video', 'tabVideo', buildVideo], ['frames', 'tabFrames', buildFrames], ['ads', 'tabAds', buildAds],
+    ['home', 'tabHome', buildHome], ['download', 'tabDownload', buildDownload], ['video', 'tabVideo', buildVideo], ['frames', 'tabFrames', buildFrames],
     ['page', 'tabPage', buildPage], ['look', 'tabLook', buildLook], ['data', 'tabData', buildData]
   ];
 
   function renderAll() {
     const ui = state.ui;
     if (!ui) return;
+    if (!state.open || state.activeTab !== 'download') liveReleaseAll();
 
     ui.tabs.textContent = '';
     for (const [id, key] of TABS) {
@@ -6682,7 +6372,6 @@
     const values = {
       pendingVideos: stats.pendingVideos, activeVideos: stats.activeVideos,
       pendingFrames: stats.pendingFrames, activeFrames: stats.activeFrames,
-      filteredAds: stats.filteredAds, blockedScripts: state.blockedScripts, blockedRequests: state.blockedRequests,
       popups: state.popupsBlocked, resources: stats.resources === null ? '-' : stats.resources,
       cleanedEntries: stats.cleanedEntries, detachedEntries: stats.detachedEntries,
       probeStat: state.probeCount ? `${state.probeCount} · ${formatSize(state.probeBytes) || '0 KB'}` : '0'
@@ -6709,7 +6398,7 @@
     ui.sheet.classList.toggle('on', state.open);
     ui.scrim.classList.toggle('on', state.open);
     ui.fab.classList.toggle('open', state.open);
-    if (state.open) renderAll();
+    if (state.open) renderAll(); else liveReleaseAll();
   }
 
   function createPanel() {
@@ -6887,7 +6576,7 @@
     // IndexedDB only keeps a backup of the settings; adopt it if localStorage was empty (cleared / private).
     idbLoadSettings().then(idbSettings => {
       if (!idbSettings || settingsFromLocalStorage) return;
-      Object.assign(settings, sanitize(idbSettings, { ...DEFAULTS, customAdHosts: [] }));
+      Object.assign(settings, sanitize(idbSettings, { ...DEFAULTS }));
       saveSettings();
       applyAll();
     }).catch(() => {});
@@ -6909,8 +6598,7 @@
       root.classList.add('shv-ultralite');
       root.classList.toggle('shv-lite-effects', settings.calmMotion);
       root.classList.toggle('shv-ultra-mode', settings.smartCards);
-      root.classList.toggle('shv-cosmetic-ads', settings.cosmeticAds);
-      root.classList.toggle('shv-flat', settings.flatEffects);
+        root.classList.toggle('shv-flat', settings.flatEffects);
       scanMedia(document);
       if (settings.lazyImages || settings.asyncDecode) optimizeAllImages();
       if (settings.smartCards) optimizeRepeatedCards(document);
@@ -6934,14 +6622,13 @@
 
   if (window.__SHV_TEST__) {
     Object.assign(window.__SHV_TEST__, {
-      state, settings, T, DEFAULTS, KNOWN_AD_HOSTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
+      state, settings, T, DEFAULTS, applyAll, setOpt, getUI: () => state.ui, diagnosticsText,
       videoStates, activateVideo, releaseInactiveNow, hashKey, videoKeyUrl, isLockedMedia,
       selection, downloadRows, linkInfo, copyRecs, downloadRecs, loadAllVideos, THEME_COLORS,
-      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, elementDuration, storeThumb, probeVideo, headInfo, runDownloadJob, liveThumbs, liveDead, wantLive, thumbsBlocked, captureAny, decodeBySeek, makeThumbsNow, thumbWhy, videoStates, dlQ, retryFailed, pruneSelection, canvasState, queueRescue, hydrateRows, saved, savedSel, savedThumbs, saveRec, toggleSaved, unsaveKey, savedList, idbSaveThumb, lsThumbs, lsSavedThumbs, gmDlHealth, dlLog, thumbStats, openSaved, buildSaved, buildDownload, renderAll, selectionTotals, infoEligible, autoRowInfo, diagLog,
+      thumbCache, dlInfo, fetchRowInfo, holdBlocksPlay, releaseVideoEntry, lockedVideoEntries, idbGetThumbs, idbGetVideoMetaMany, updatePlaceholderInfo, probeSession, missingInfoRecs, refreshRows, saveVideoCache, GM_FN, fileNameOf, storeThumb, probeVideo, headInfo, runDownloadJob, verifyStoredThumbs, liveThumbs, liveDead, wantLive, thumbsBlocked, captureAny, thumbWhy, dlQ, retryFailed, pruneSelection, canvasState, queueRescue, hydrateRows, saved, savedSel, savedThumbs, saveRec, toggleSaved, unsaveKey, savedList, idbSaveThumb, lsThumbs, lsSavedThumbs, dlLog, thumbStats, openSaved, buildSaved, buildDownload, renderAll, selectionTotals, infoEligible, autoRowInfo, diagLog,
       // Internal test functions
-      testSanitize: (input) => sanitize(input, { ...DEFAULTS, customAdHosts: [] }),
-      testIsUsableURL: (raw) => isUsableURL(raw),
-      testHostMatches: (host, list) => hostMatches(host, list)
+      testSanitize: (input) => sanitize(input, { ...DEFAULTS }),
+      testIsUsableURL: (raw) => isUsableURL(raw)
     });
   }
 

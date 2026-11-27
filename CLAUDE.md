@@ -2,7 +2,7 @@
 
 **Project Root**: `D:\Desktop\project\scripts\shahvani-ultra-lite`  
 **GitHub Repo**: `parhamghahremani/shahvani-ultra-lite` (Public)  
-**Current Version**: 3.6.5  
+**Current Version**: 3.6.6  
 **Primary Language**: Persian (communication) / English (code, docs, metadata)
 
 ---
@@ -90,13 +90,14 @@ shahvani-ultra-lite/
 
 ### Constants (top of IIFE)
 - `MEDIA_DELAY_MS = 60`, `VISUAL_BATCH_MS = 160`, `UI_UPDATE_MS = 120`
-- `AUTO_RELEASE_INTERVAL_MS = 15000`, `MAX_BLOCKED_LOG_ENTRIES = 500`
+- `AUTO_RELEASE_INTERVAL_MS = 15000`
 - `PLACEHOLDER_MIN_HEIGHT = 140`, `PLACEHOLDER_MAX_HEIGHT = 320`
 - `ASPECT_RATIO_DEFAULT = 16/9`, `GESTURE_WINDOW_MS = 5000`
 - **v3.5.4**: `PROBE_HEAD_BYTES = 16384`, `PROBE_TAIL_BYTES = 8192`, `PROBE_CONCURRENCY = 2`, `PROBE_SESSION_MAX = 120`
 - **v3.6.3**: `PROBE_TOTAL_MS = 24000`, `IS_ANDROID` constant, `DL_CONCURRENCY` (Android 2, Desktop 3)
 - **v3.6.4**: `IDB_VERSION = 4` (savedThumbs store), `GM_DOWNLOAD_TIMEOUT_MS = 20000`, `ANDROID_LINK_GAP_MS = 2000`
 - **v3.6.5**: Removed `elementDuration` probe stage, removed `autoThumbs` setting, **live preview for opened videos on Android** (max 2, on-screen only, auto-caches as real thumbnail), thumbnails only after user opens video, sync decode for thumbnails, seek-to-decode for Android metadata-only videos
+- **v3.6.6**: Removed `MAX_BLOCKED_LOG_ENTRIES`, `elementDuration` (fully), `linkFallback`, `dlBusy`, `DOWNLOAD_CONFIRM_OVER`, `MAX_SAFE_INT`, `MAX_ID_LENGTH`, `blockedRequests` IndexedDB store; live preview always-on (no toggle), 3-stage cors→blob→plain, `LIVE_MAX_ACTIVE=2`, `LIVE_MAX_KEPT=40`, `THUMB_VIDEO_BYTES=1.5MB`, seek-decode removed, Load All uses `preload=metadata` (no auto buffer), Ads tab and download method setting removed, 45 dead translations removed
 
 ### IndexedDB Schema (`IDB_VERSION = 4`)
 - `settings` — key: `main`
